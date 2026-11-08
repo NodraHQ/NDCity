@@ -4,15 +4,25 @@ Uma cidadezinha em pixel art (visão isométrica, estilo SimCity clássico, sem
 mecânica de jogo) onde cada seguidor de um perfil do Instagram resgata uma
 casinha com o seu @.
 
-## O que já funciona (MVP)
+## O que já funciona
 
-- Uma cidade gerada automaticamente a partir de uma "seed" (ruas, lotes, praças, praia).
-- Carrinhos e pessoas andando (só animação).
-- Resgate por código: o código vem ligado a um @ e vale para uma casinha só.
-- A pessoa escolhe o tipo (casa, prédio, oficina, padaria, cabaré) e o lote no mapa.
-- A primeira pessoa a resgatar vira prefeita (só troféu) e libera a cidade.
-- Página `/admin` com senha para gerar códigos, ver quem usou e remover casinhas.
-- Funciona no celular: arrastar, pinça para zoom, tocar numa casa mostra o @.
+- **Mapa do Brasil** em pixel art com os 5.570 municípios (dados do IBGE). Busca
+  por nome; capitais e cidades com moradores aparecem destacadas.
+- **Cada município é uma cidade** gerada automaticamente (capitais são maiores).
+  Toda cidade começa bloqueada; quem chega primeiro vira **prefeito** (só troféu).
+- **Prefeitura com sucessão**: se o prefeito sai (remoção ou mudança), a
+  prefeitura passa para o morador mais antigo; sem moradores, fica vaga.
+- **Uma casa por @**, presa à cidade escolhida.
+- **Dia e noite de verdade**: calculado pela posição do sol em cada cidade, com
+  luzes nas casas, postes e faróis. Teste com `?hora=22` no fim do endereço.
+- **População**: carros e pessoas aumentam conforme a cidade ganha casas.
+- **Login do morador**: entra com o mesmo código do resgate ("Já tenho casinha").
+- **Recursos pagos** (liberados manualmente no admin até o gateway ficar pronto):
+  - 💬 Chat da cidade, só entre moradores, com filtro de palavrões (mensal)
+  - 🎨 Personalização das cores da casa (e da prefeitura, para o prefeito)
+  - 🚚 Caminhão de mudança para trocar de cidade (R$ 5)
+- **Admin** (`/admin`): gerar códigos, liberar recursos pagos, remover casinha
+  (remove também os códigos e o login da pessoa).
 
 Sem o Supabase configurado, o site roda em **modo teste** (nada fica salvo).
 
@@ -30,9 +40,9 @@ São 3 contas gratuitas: **GitHub** (já tem), **Supabase** (banco de dados) e
    para o banco (guarde, mas não vamos precisar dela agora) e escolha a região
    **South America (São Paulo)**. Toque em **Create new project** e espere ~2 min.
 3. No menu (☰), abra **SQL Editor** → **New query**.
-4. Abra o arquivo [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-   aqui no GitHub, toque no botão de **copiar** (ícone de dois quadradinhos),
-   cole no SQL Editor e toque em **Run**. Deve aparecer "Success".
+4. Rode, em ordem, os arquivos da pasta [`supabase/migrations`](supabase/migrations)
+   (`0001_init.sql`, depois `0002_brasil_chat_pagos.sql`): abra cada um aqui no
+   GitHub, toque em **copiar**, cole no SQL Editor e toque em **Run**.
 5. No menu, vá em **Project Settings** → **API** (ou **Data API** / **API Keys**). Anote:
    - **Project URL** (algo como `https://abcd.supabase.co`)
    - a chave **secret** / **service_role** (toque em *Reveal* para ver). ⚠️ Essa
@@ -61,8 +71,10 @@ São 3 contas gratuitas: **GitHub** (já tem), **Supabase** (banco de dados) e
 - Abra `seu-site.vercel.app/admin`, entre com a `ADMIN_PASSWORD`.
 - Digite o @ de um seguidor e toque em **Gerar**.
 - Toque em **Copiar mensagem pra DM** e mande para a pessoa no Instagram.
-- A pessoa abre o site, toca em **Resgatar casinha**, digita o código, escolhe
-  o tipo e o lote. Pronto!
+- A pessoa abre o site, busca a cidade dela no mapa, toca em **Resgatar
+  casinha**, digita o código, escolhe o tipo e o lote. Pronto!
+- Alguém pagou um recurso por Pix? Em **Liberar recurso pago**, digite o @ e
+  escolha o produto.
 
 ---
 
@@ -81,20 +93,29 @@ Crie um `.env.local` a partir do `.env.example`.
 ```
 src/
   app/                    páginas e APIs (Next.js App Router)
-    page.tsx              cidade padrão
-    c/[slug]/page.tsx     qualquer cidade (pronto para o mapa-múndi)
-    admin/                painel de códigos
+    page.tsx              mapa do Brasil
+    c/[slug]/page.tsx     uma cidade (ex.: /c/goiania-go)
+    admin/                painel do dono do perfil
     api/claim/            conferir código e resgatar
-    api/admin/            login, códigos, remover casinha
-    api/cities/[slug]/    dados públicos da cidade
+    api/me/               login do morador, personalizar, mudança
+    api/chat/[slug]/      chat da cidade
+    api/purchase/         início de compra (gateway entra aqui)
+    api/admin/            códigos, liberar recursos, remover casinha
   components/
-    CityView.tsx          interface e fluxo de resgate
+    world/                mapa do Brasil (PixiJS)
+    CityView.tsx          tela da cidade e todos os fluxos
+    ChatPanel.tsx         chat
     city/art.ts           pixel art feita por código (sem imagens de terceiros)
-    city/scene.ts         PixiJS: câmera, animações, toques
+    city/scene.ts         PixiJS: câmera, animações, dia/noite, toques
+  data/                   municípios e contorno do Brasil (gerados por scripts/)
   lib/
-    city/generate.ts      seed -> ruas, lotes, caminhos (roda no navegador e no servidor)
+    city/generate.ts      seed -> ruas, lotes, caminhos
+    geo/cities.ts         lista e busca de municípios
+    sun.ts                posição do sol (dia e noite)
+    resident.ts           login do morador e recursos liberados
+    payments/products.ts  produtos pagos e preços
+    moderation/           filtro de palavrões
     db/                   banco: Supabase ou memória (modo teste)
-    codes.ts              gera códigos (será usado também pelo bot do Instagram)
 supabase/migrations/      SQL do banco
 docs/ROADMAP.md           próximas etapas e onde cada uma se encaixa
 ```

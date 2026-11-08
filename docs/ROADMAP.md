@@ -1,31 +1,15 @@
 # Próximas etapas
 
-O MVP foi organizado para receber estas funcionalidades sem reescrever tudo.
-
-## Mapa-múndi com várias cidades
-- Cada cidade já é uma linha na tabela `cities` (slug, nome, seed).
-- A rota `/c/[slug]` já mostra qualquer cidade; falta a tela do mapa-múndi
-  (zoom out) listando as cidades com nome e posição aproximada.
-- "Bloqueada até o primeiro resgate" já existe: `cities.mayor_handle` nulo =
-  bloqueada. A função `claim_house` já entrega a prefeitura e libera a cidade.
-- Adicionar colunas `lat`/`lng` (ou x/y no mapa estilizado) em `cities`.
-
-## Pessoa presa à cidade
-- `claims.instagram_handle` é único no mundo todo: uma casinha por @, em uma
-  cidade. Já está garantido pelo banco.
-
-## Chat por cidade com filtro de palavrões
-- Nova tabela `messages (city_id, handle, text, created_at)`.
-- Só quem tem casinha na cidade pode ler/escrever (conferir via `claims`).
-- Precisa de um "login" leve: guardar no navegador um token gerado no momento
-  do resgate (nova tabela `sessions`) ou usar Supabase Auth.
-- Supabase Realtime para as mensagens aparecerem na hora.
-- Filtro: lista de palavras em `src/lib/moderation/` aplicada no servidor.
-
-## Mudança de cidade paga (R$ 5 via Pix)
-- Provedor de Pix com webhook (ex.: Mercado Pago, Asaas, Efí).
-- Fluxo: gera cobrança → webhook confirma → função SQL `move_house` troca
-  `city_id`/`lot_index` da casinha (e a prefeitura antiga continua com o troféu).
+## Gateway de pagamento (quando for escolhido)
+Tudo já está preparado; falta só conectar o provedor (Mercado Pago, Asaas, Efí…):
+1. Em `src/app/api/purchase/route.ts`: criar a cobrança Pix, salvar uma linha
+   na tabela `purchases` (status `pending`) e devolver `{ url }` ou o QR do Pix.
+2. Criar `src/app/api/payments/webhook/route.ts`: quando o provedor avisar que
+   pagou, marcar a compra como `paid` e chamar
+   `store.grantEntitlement(handle, product.feature, { days, credits })`
+   (o mesmo que o botão "Liberar" do admin faz).
+3. Mudar `PAYMENTS_ENABLED` para `true` em `src/lib/payments/products.ts`.
+4. Ajustar preços em `src/lib/payments/products.ts`.
 
 ## Bot de DM no Instagram
 - Rota `src/app/api/instagram/webhook/route.ts` recebe comentários/DMs.
@@ -35,6 +19,8 @@ O MVP foi organizado para receber estas funcionalidades sem reescrever tudo.
 - Precisa de: app na Meta for Developers, conta profissional do Instagram
   ligada a uma página, token de acesso e verificação do webhook.
 
-## Extras cosméticos
-- Pintar a casa / trocar o tipo / enfeites: novas colunas em `claims`
-  (`color`, `decorations`) e variações em `src/components/city/art.ts`.
+## Ideias
+- Chat em tempo real com Supabase Realtime (hoje atualiza a cada 4 s).
+- Cidades litorâneas com mar do lado certo; tamanho da cidade pela população.
+- Mais itens de personalização: enfeites, placas, troca do tipo de construção.
+- Ranking de cidades mais populosas no mapa.

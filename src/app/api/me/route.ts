@@ -1,0 +1,13 @@
+import { NextResponse } from "next/server";
+import { currentResident } from "@/lib/resident";
+
+export const dynamic = "force-dynamic";
+
+/** Quem está logado neste navegador. */
+export async function GET() {
+  const r = await currentResident();
+  if (!r) return NextResponse.json({ resident: null });
+  return NextResponse.json({
+    resident: { handle: r.handle, citySlug: r.house?.citySlug ?? null, perks: r.perks },
+  });
+}

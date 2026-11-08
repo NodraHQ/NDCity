@@ -2,6 +2,7 @@ import { Graphics } from "pixi.js";
 import type { BuildingType } from "@/lib/buildings";
 import type { CityLayout, Decoration, TileKind } from "@/lib/city/generate";
 import { createRng } from "@/lib/city/rng";
+import { type Style, hexToNum } from "@/lib/styles";
 
 /**
  * Desenhos em pixel art feitos 100% por código (formas simples), sem
@@ -180,26 +181,28 @@ function finish(iso: Iso): Drawing {
   return { g: iso.g, width: iso.width, height: iso.height, ox: iso.n * (TW / 2), oy: iso.head };
 }
 
-export function drawBuilding(type: BuildingType, variant: number): Drawing {
+export function drawBuilding(type: BuildingType, variant: number, style?: Style | null): Drawing {
   const v = Math.abs(variant) % 5;
-  const wall = WALLS[type][v];
+  const wall = hexToNum(style?.wall, WALLS[type][v]);
+  const roof = hexToNum(style?.roof, ROOFS[v]);
+  const accent = (fallback: number) => hexToNum(style?.accent, fallback);
   switch (type) {
     case "casa": {
       const iso = new Iso(new Graphics(), 1, 22);
       const [a, b] = [0.2, 0.8];
       iso.box(a, a, b, b, 0, 9, wall);
-      iso.leftRect(b, 0.32, 0.46, 0, 6, 0x7a4a2a); // porta
+      iso.leftRect(b, 0.32, 0.46, 0, 6, accent(0x7a4a2a)); // porta
       iso.leftRect(b, 0.56, 0.72, 3, 7, WINDOW);
       iso.rightRect(b, 0.3, 0.46, 3, 7, WINDOW);
       iso.rightRect(b, 0.56, 0.7, 3, 7, WINDOW);
-      iso.gableRoof(a - 0.05, a - 0.05, b + 0.05, b + 0.05, 9, 8, ROOFS[v]);
+      iso.gableRoof(a - 0.05, a - 0.05, b + 0.05, b + 0.05, 9, 8, roof);
       return finish(iso);
     }
     case "predio": {
       const iso = new Iso(new Graphics(), 1, 46);
       const [a, b] = [0.14, 0.86];
       const h = 36 + (v % 3) * 2;
-      iso.box(a, a, b, b, 0, h, wall, shade(wall, 0.8));
+      iso.box(a, a, b, b, 0, h, wall, style?.roof ? roof : shade(wall, 0.8));
       for (let z = 5; z < h - 4; z += 6) {
         for (const u of [0.24, 0.44, 0.64]) {
           const lit = (z * 7 + u * 100 + v) % 5 < 1;
@@ -208,18 +211,18 @@ export function drawBuilding(type: BuildingType, variant: number): Drawing {
         }
       }
       iso.leftRect(b, 0.42, 0.58, 0, 4, 0x3a3a44);
-      iso.box(0.3, 0.45, 0.5, 0.65, h, h + 4, 0x8a8f99); // caixa d'água
+      iso.box(0.3, 0.45, 0.5, 0.65, h, h + 4, accent(0x8a8f99)); // caixa d'água
       return finish(iso);
     }
     case "oficina": {
       const iso = new Iso(new Graphics(), 1, 20);
       const [a, b] = [0.1, 0.9];
-      iso.box(a, a, b, b, 0, 11, wall, 0x6d7380);
+      iso.box(a, a, b, b, 0, 11, wall, style?.roof ? roof : 0x6d7380);
       iso.leftRect(b, 0.2, 0.7, 0, 8, 0x4a4f58); // portão
       for (let z = 1; z < 8; z += 2) iso.leftRect(b, 0.2, 0.7, z, z + 1, 0x5d636d);
       iso.rightRect(b, 0.3, 0.7, 4, 8, WINDOW);
       iso.box(0.15, 0.62, 0.32, 0.8, 11, 17, 0x6a5b52); // chaminé
-      iso.leftRect(b, 0.74, 0.86, 2, 6, 0xf0a020); // placa
+      iso.leftRect(b, 0.74, 0.86, 2, 6, accent(0xf0a020)); // placa
       return finish(iso);
     }
     case "padaria": {
@@ -233,18 +236,18 @@ export function drawBuilding(type: BuildingType, variant: number): Drawing {
         const u = 0.16 + i * 0.12;
         iso.poly(
           [[b, u, 9], [b, u + 0.12, 9], [b + 0.14, u + 0.12, 7], [b + 0.14, u, 7]],
-          i % 2 ? 0xffffff : 0xd8392b,
+          i % 2 ? 0xffffff : accent(0xd8392b),
         );
       }
-      iso.gableRoof(a - 0.03, a - 0.03, b + 0.03, b + 0.03, 11, 6, 0x8a4b32);
+      iso.gableRoof(a - 0.03, a - 0.03, b + 0.03, b + 0.03, 11, 6, style?.roof ? roof : 0x8a4b32);
       iso.box(0.25, 0.25, 0.38, 0.38, 14, 20, 0xb0a090); // chaminé do forno
       return finish(iso);
     }
     case "cabare": {
       const iso = new Iso(new Graphics(), 1, 28);
       const [a, b] = [0.14, 0.86];
-      iso.box(a, a, b, b, 0, 14, wall, shade(wall, 0.7));
-      const neon = [0xff4fd8, 0x4ff0ff, 0xffe14f][v % 3];
+      iso.box(a, a, b, b, 0, 14, wall, style?.roof ? roof : shade(wall, 0.7));
+      const neon = accent([0xff4fd8, 0x4ff0ff, 0xffe14f][v % 3]);
       iso.leftRect(b, a, b, 13, 14, neon); // neon no topo
       iso.rightRect(b, a, b, 13, 14, neon);
       iso.leftRect(b, 0.38, 0.58, 0, 7, 0x1a0a20); // porta
@@ -263,9 +266,11 @@ export function drawBuilding(type: BuildingType, variant: number): Drawing {
 }
 
 /** A prefeitura (2x2 tiles). */
-export function drawCityHall(): Drawing {
+export function drawCityHall(style?: Style | null): Drawing {
   const iso = new Iso(new Graphics(), 2, 56);
-  const wall = 0xf2efe6;
+  const wall = hexToNum(style?.wall, 0xf2efe6);
+  const gold = hexToNum(style?.accent, 0xe8b830);
+  const flag = hexToNum(style?.roof, 0x2e9e4a);
   const [a, b] = [0.2, 1.8];
   iso.box(a - 0.1, a - 0.1, b + 0.1, b + 0.1, 0, 3, 0xc9c2b0); // escadaria/base
   iso.box(a, a, b, b, 3, 22, wall);
@@ -277,11 +282,11 @@ export function drawCityHall(): Drawing {
   iso.box(a, a, b, b, 22, 24, 0xd8d2c0, 0xc8c0a8); // cornija
   // cúpula dourada
   iso.box(0.7, 0.7, 1.3, 1.3, 24, 30, 0xe9e4d8);
-  iso.box(0.78, 0.78, 1.22, 1.22, 30, 34, 0xe8b830, 0xf5cf4a);
-  iso.box(0.86, 0.86, 1.14, 1.14, 34, 37, 0xe8b830, 0xf5cf4a);
+  iso.box(0.78, 0.78, 1.22, 1.22, 30, 34, gold, shade(gold, 1.15));
+  iso.box(0.86, 0.86, 1.14, 1.14, 34, 37, gold, shade(gold, 1.15));
   // mastro e bandeira
   iso.poly([[1, 1, 37], [1, 1.04, 37], [1, 1.04, 52], [1, 1, 52]], 0x55555a);
-  iso.poly([[1, 1.04, 52], [1, 1.34, 52], [1, 1.34, 46], [1, 1.04, 46]], 0x2e9e4a);
+  iso.poly([[1, 1.04, 52], [1, 1.34, 52], [1, 1.34, 46], [1, 1.04, 46]], flag);
   iso.px([1, 1.19, 50], 0xf5d02a, 2, 2);
   return finish(iso);
 }
@@ -385,5 +390,28 @@ export function drawPerson(variant: number): Drawing {
   g.rect(cx, cy - 2, 1, 2).fill(0x333344);
   g.rect(cx - 1, cy - 5, 2, 3).fill(SHIRTS[variant % SHIRTS.length]);
   g.rect(cx - 1, cy - 7, 2, 2).fill(SKINS[variant % SKINS.length]);
+  return finish(iso);
+}
+
+// ---------------------------------------------------------------- noite
+
+/** Brilho de luz (janelas, postes, faróis) para somar por cima à noite. */
+export function drawGlow(color: number, radius: number): Drawing {
+  const g = new Graphics();
+  const size = radius * 2 + 2;
+  const c = radius + 1;
+  for (let r = radius; r > 0; r -= Math.max(1, Math.floor(radius / 5))) {
+    const a = 0.08 + 0.32 * (1 - r / radius);
+    g.ellipse(c, c, r, r * 0.6).fill({ color, alpha: a });
+  }
+  return { g, width: size, height: size, ox: c, oy: c };
+}
+
+/** Poste de luz (fica de dia e de noite). */
+export function drawLamp(): Drawing {
+  const iso = new Iso(new Graphics(), 1, 16);
+  const [x, y] = iso.pt([0.5, 0.5, 0]);
+  iso.g.rect(x, y - 12, 1, 12).fill(0x3a3a44);
+  iso.g.rect(x - 1, y - 13, 3, 2).fill(0xfff1b0);
   return finish(iso);
 }

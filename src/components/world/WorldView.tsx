@@ -1,0 +1,119 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SITE_NAME } from "@/config/site";
+import { findCity, searchCities } from "@/lib/geo/cities";
+import { localTime } from "@/lib/sun";
+import type { ActiveInfo } from "./scene";
+
+const WorldCanvas = dynamic(() => import("./WorldCanvas"), {
+  ssr: false,
+  loading: () => <div className="city-loading">Desenhando o Brasil…</div>,
+});
+
+type Me = { handle: string; citySlug: string | null } | null;
+
+export default function WorldView({ initialActive }: { initialActive: ActiveInfo[] }) {
+  const [active, setActive] = useState(initialActive);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState(0);
+  const [query, setQuery] = useState("");
+  const [me, setMe] = useState<Me>(null);
+  const zoomRef = useRef<((f: number) => void) | null>(null);
+
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((j) => setMe(j.resident))
+      .catch(() => {});
+    const id = setInterval(async () => {
+      const r = await fetch("/api/cities", { cache: "no-store" });
+      if (r.ok) setActive((await r.json()).cities);
+    }, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const results = useMemo(() => searchCities(query), [query]);
+  const activeMap = useMemo(() => new Map(active.map((a) => [a.slug, a])), [active]);
+  const totalHouses = active.reduce((n, a) => n + a.houses, 0);
+  const city = selected ? findCity(selected) : null;
+  const info = selected ? activeMap.get(selected) : undefined;
+  const myCity = me?.citySlug ? findCity(me.citySlug) : null;
+
+  function choose(slug: string) {
+    setSelected(slug);
+    setFocusKey((k) => k + 1);
+    setQuery("");
+  }
+
+  return (
+    <main className="city-page">
+      <WorldCanvas active={active} selected={selected} focusKey={focusKey} onCityTap={setSelected} zoomRef={zoomRef} />
+
+      <header className="topbar world">
+        <div className="title">
+          <strong>{SITE_NAME} · Brasil</strong>
+          <span>
+            {active.length} cidade{active.length === 1 ? "" : "s"} com moradores · {totalHouses} casinha{totalHouses === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="search">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="🔍 Buscar cidade…"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {results.length > 0 && (
+            <ul className="results">
+              {results.map((c) => (
+                <li key={c.slug}>
+                  <button onClick={() => choose(c.slug)}>
+                    {c.name} <small>{c.uf}</small>
+                    {activeMap.has(c.slug) && <em> · {activeMap.get(c.slug)!.houses}🏠</em>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </header>
+
+      {myCity && !selected && (
+        <Link className="btn primary my-city" href={`/c/${myCity.slug}`}>
+          🏠 Minha cidade: {myCity.name}
+        </Link>
+      )}
+
+      <div className="zoom">
+        <button className="btn" aria-label="Aproximar" onClick={() => zoomRef.current?.(1.6)}>+</button>
+        <button className="btn" aria-label="Afastar" onClick={() => zoomRef.current?.(1 / 1.6)}>−</button>
+      </div>
+
+      {city && (
+        <div className="sheet">
+          <button className="close" onClick={() => setSelected(null)} aria-label="Fechar">✕</button>
+          <h3>
+            {city.name} <small>· {city.uf}</small>
+          </h3>
+          <p className="muted">🕒 {localTime(city.timezone)} agora</p>
+          {info ? (
+            <p>
+              🏛 Prefeito(a): <b>@{info.mayorHandle}</b>
+              <br />
+              🏠 {info.houses} casinha{info.houses === 1 ? "" : "s"}
+            </p>
+          ) : (
+            <p>🔒 Ninguém mora aqui ainda. Quem resgatar a primeira casinha vira <b>prefeito</b> e libera a cidade!</p>
+          )}
+          <div className="row">
+            <Link className="btn primary" href={`/c/${city.slug}`}>Visitar {city.name} →</Link>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}

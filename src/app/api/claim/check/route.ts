@@ -16,9 +16,12 @@ export async function POST(req: Request) {
   const store = getStore();
   const code = await store.getCode(normalizeCode(body.code));
   if (!code) return NextResponse.json({ ok: false, message: CLAIM_ERRORS.code_not_found });
-  if (code.usedAt) return NextResponse.json({ ok: false, message: CLAIM_ERRORS.code_used });
-  if (await store.findClaimByHandle(code.instagramHandle))
-    return NextResponse.json({ ok: false, message: CLAIM_ERRORS.handle_has_house });
+  if (code.usedAt || (await store.findClaimByHandle(code.instagramHandle)))
+    return NextResponse.json({
+      ok: false,
+      alreadyResident: true,
+      message: "Esse código já foi usado. Se a casinha é sua, toque em “Já tenho casinha” para entrar.",
+    });
 
   return NextResponse.json({ ok: true, code: code.code, handle: code.instagramHandle });
 }

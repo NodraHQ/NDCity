@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Code } from "@/lib/db/types";
+import { type ProductId, PRODUCTS, formatPrice } from "@/lib/payments/products";
 
 export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "memory" }) {
   const [handle, setHandle] = useState("");
@@ -10,6 +11,9 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
   const [last, setLast] = useState<Code | null>(null);
   const [removeHandle, setRemoveHandle] = useState("");
   const [busy, setBusy] = useState(false);
+  const [grantHandle, setGrantHandle] = useState("");
+  const [grantProduct, setGrantProduct] = useState<ProductId>("chat_mensal");
+  const [grantMsg, setGrantMsg] = useState<{ text: string; error?: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/codes", { cache: "no-store" });
@@ -56,6 +60,24 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
     }
   }
 
+  async function grant(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/admin/entitlements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: grantHandle, product: grantProduct }),
+    });
+    const json = await res.json();
+    if (!json.ok) return setGrantMsg({ text: json.message, error: true });
+    const p = json.perks;
+    const parts = [
+      p.chatUntil ? `chat até ${new Date(p.chatUntil).toLocaleDateString("pt-BR")}` : "sem chat",
+      p.customize ? "personalização liberada" : "sem personalização",
+      `${p.moveCredits} mudança(s)`,
+    ];
+    setGrantMsg({ text: `${json.message} Agora tem: ${parts.join(", ")}.` });
+  }
+
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
     window.location.reload();
@@ -69,7 +91,7 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
       <div className="admin-head">
         <h1>🏗 Admin</h1>
         <div className="row">
-          <a className="btn" href="/">Ver cidade</a>
+          <a className="btn" href="/">Ver mapa</a>
           <button className="btn" onClick={logout}>Sair</button>
         </div>
       </div>
@@ -118,6 +140,21 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
           </table>
         </div>
       </div>
+
+      <form className="card" onSubmit={grant}>
+        <h2>Liberar recurso pago</h2>
+        <p>Enquanto o pagamento online não está pronto: a pessoa paga por Pix direto pra você e você libera aqui.</p>
+        <input value={grantHandle} onChange={(e) => setGrantHandle(e.target.value)} placeholder="@fulano" autoCapitalize="none" autoComplete="off" />
+        <select value={grantProduct} onChange={(e) => setGrantProduct(e.target.value as ProductId)}>
+          {(Object.keys(PRODUCTS) as ProductId[]).map((id) => (
+            <option key={id} value={id}>
+              {PRODUCTS[id].label} — {formatPrice(PRODUCTS[id].priceCents)}
+            </option>
+          ))}
+        </select>
+        <button className="btn primary" disabled={!grantHandle.trim()}>Liberar</button>
+        {grantMsg && <p className={grantMsg.error ? "error" : "ok"}>{grantMsg.text}</p>}
+      </form>
 
       <form className="card" onSubmit={removeHouse}>
         <h2>Remover casinha</h2>

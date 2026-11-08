@@ -4,14 +4,14 @@ import { type RefObject, useEffect, useMemo, useRef } from "react";
 import { generateCity } from "@/lib/city/generate";
 import { CityScene, type SceneCallbacks, type SceneState } from "./scene";
 
-type Props = SceneState & SceneCallbacks & { seed: string; zoomRef?: RefObject<((f: number) => void) | null> };
+type Props = SceneState & SceneCallbacks & { seed: string; size: number; zoomRef?: RefObject<((f: number) => void) | null> };
 
 /** O mapa da cidade (PixiJS) dentro de um componente React. */
 export default function CityCanvas(props: Props) {
-  const { seed, zoomRef, onLotTap, onCityHallTap, onEmptyTap, ...state } = props;
+  const { seed, size, zoomRef, onLotTap, onCityHallTap, onEmptyTap, ...state } = props;
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<CityScene | null>(null);
-  const layout = useMemo(() => generateCity(seed), [seed]);
+  const layout = useMemo(() => generateCity(seed, size), [seed, size]);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -41,10 +41,10 @@ export default function CityCanvas(props: Props) {
     };
   }, [layout, zoomRef]);
 
-  const { houses, mayorHandle, mode, pickedLot, ghostType, focusLot } = state;
+  const { houses, mayorHandle, hallStyle, darkness, mode, pickedLot, ghostType, focusLot } = state;
   useEffect(() => {
-    scene.current?.update({ houses, mayorHandle, mode, pickedLot, ghostType, focusLot });
-  }, [houses, mayorHandle, mode, pickedLot, ghostType, focusLot]);
+    scene.current?.update({ houses, mayorHandle, hallStyle, darkness, mode, pickedLot, ghostType, focusLot });
+  }, [houses, mayorHandle, hallStyle, darkness, mode, pickedLot, ghostType, focusLot]);
 
   return <div ref={host} className="city-canvas" />;
 }

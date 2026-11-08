@@ -1,13 +1,10 @@
-import { notFound } from "next/navigation";
-import CityView from "@/components/CityView";
-import { DEFAULT_CITY } from "@/config/site";
-import { loadCityData } from "@/lib/city-data";
+import WorldView from "@/components/world/WorldView";
+import { getStore } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-/** Página inicial: mostra a cidade padrão. */
+/** Página inicial: o mapa do Brasil. */
 export default async function Home() {
-  const data = await loadCityData(DEFAULT_CITY.slug);
-  if (!data) notFound();
-  return <CityView initial={data} />;
+  const cities = await getStore().listActiveCities();
+  return <WorldView initialActive={cities.map(({ slug, houses, mayorHandle }) => ({ slug, houses, mayorHandle }))} />;
 }

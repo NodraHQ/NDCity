@@ -1,4 +1,5 @@
 import { Application, Container, Rectangle, Sprite, Text, Texture, TextureStyle, type Graphics } from "pixi.js";
+import { type Style, styleKey } from "@/lib/styles";
 import type { BuildingType } from "@/lib/buildings";
 import { type CityLayout, loopLength, pointOnLoop } from "@/lib/city/generate";
 import { hashString } from "@/lib/city/rng";
@@ -11,16 +12,21 @@ import {
   drawCityHall,
   drawDecoration,
   drawForSaleSign,
+  drawGlow,
   drawGround,
+  drawLamp,
   drawLotHighlight,
   drawPerson,
 } from "./art";
 
-export type House = { lotIndex: number; handle: string; type: BuildingType };
+export type House = { lotIndex: number; handle: string; type: BuildingType; style?: Style | null };
 
 export type SceneState = {
   houses: House[];
   mayorHandle: string | null;
+  hallStyle: Style | null;
+  /** 0 = dia, 1 = noite. */
+  darkness: number;
   mode: "view" | "pick";
   pickedLot: number | null;
   ghostType: BuildingType | null;
@@ -43,21 +49,35 @@ type Mover = { sprite: Sprite; path: CityLayout["paths"][number]; length: number
 
 export class CityScene {
   private app!: Application;
+  private camera = new Container();
   private world = new Container();
+  private lights = new Container();
   private highlights = new Container();
   private objects = new Container();
   private labels = new Container();
   private cache = new Map<string, Tex>();
   private ox = 0;
   private lotByTile = new Map<number, number>();
-  private houseSprites = new Map<number, { sprite: Sprite; label: Text; house: House }>();
+  private houseSprites = new Map<number, { sprite: Sprite; label: Text; house: House; glow: Sprite }>();
+  private hallGlow!: Sprite;
+  private hallStyleKey = "-";
+  private carGlows = new Map<Mover, Sprite>();
   private signSprites = new Map<number, Sprite>();
   private highlightSprites: Sprite[] = [];
   private ghost: Sprite | null = null;
   private hallSprite!: Sprite;
   private hallLabel!: Text;
   private movers: Mover[] = [];
-  private state: SceneState = { houses: [], mayorHandle: null, mode: "view", pickedLot: null, ghostType: null, focusLot: null };
+  private state: SceneState = {
+    houses: [],
+    mayorHandle: null,
+    hallStyle: null,
+    darkness: 0,
+    mode: "view",
+    pickedLot: null,
+    ghostType: null,
+    focusLot: null,
+  };
   private zoom = 2;
   private minZoom = 0.5;
   private maxZoom = 8;
@@ -99,7 +119,10 @@ export class CityScene {
 
     this.objects.sortableChildren = true;
     this.world.addChild(this.highlights, this.objects);
-    this.app.stage.addChild(this.world, this.labels);
+    this.lights.blendMode = "add";
+    this.lights.alpha = 0;
+    this.camera.addChild(this.world, this.lights);
+    this.app.stage.addChild(this.camera, this.labels);
 
     this.buildGround();
     this.buildStatic();
@@ -186,11 +209,28 @@ export class CityScene {
       this.objects.addChild(s);
     }
     const h = this.layout.cityHall;
-    const ht = this.tex("cityhall", drawCityHall);
     this.hallSprite = new Sprite();
-    this.place(this.hallSprite, ht, h.row, h.col);
     this.hallSprite.zIndex = h.row + h.col + 2;
     this.objects.addChild(this.hallSprite);
+    this.setHallStyle(null);
+    this.hallGlow = this.glowAt("warm", h.row + 1, h.col + 1, 14);
+
+    // postes nas esquinas
+    const lamp = this.tex("lamp", drawLamp);
+    const t = this.layout.tiles;
+    const isRoad = (r: number, c: number) => t[r]?.[c] === "road";
+    for (let r = 0; r < this.layout.height; r++) {
+      for (let c = 0; c < this.layout.width; c++) {
+        if (!isRoad(r, c)) continue;
+        const n = +isRoad(r - 1, c) + +isRoad(r + 1, c) + +isRoad(r, c - 1) + +isRoad(r, c + 1);
+        if (n < 3) continue;
+        const s = new Sprite();
+        this.place(s, lamp, r - 0.45, c - 0.45);
+        s.zIndex = r + c + 0.1;
+        this.objects.addChild(s);
+        this.glowAt("lamp", r + 0.05, c + 0.05, 0, 13);
+      }
+    }
     this.hallLabel = this.makeLabel("", 0xffe14f);
     this.labels.addChild(this.hallLabel);
 
@@ -217,6 +257,25 @@ export class CityScene {
       this.objects.addChild(sprite);
       this.movers.push({ sprite, path: p, length: loopLength(p.points), t: p.offset, tex });
     }
+  }
+
+  private setHallStyle(style: Style | null) {
+    const key = styleKey(style);
+    if (key === this.hallStyleKey) return;
+    this.hallStyleKey = key;
+    const h = this.layout.cityHall;
+    this.place(this.hallSprite, this.tex(`cityhall:${key}`, () => drawCityHall(style)), h.row, h.col);
+  }
+
+  /** Cria um brilho na camada de luzes (aparece à noite). */
+  private glowAt(kind: "warm" | "lamp" | "car", r: number, c: number, height: number, radius = 10) {
+    const color = kind === "car" ? 0xfff6c0 : kind === "lamp" ? 0xffe9a0 : 0xffc870;
+    const t = this.tex(`glow:${kind}:${radius}`, () => drawGlow(color, radius));
+    const s = new Sprite(t.texture);
+    s.x = Math.round(this.wx(r, c) - t.ox);
+    s.y = Math.round(this.wy(r, c) - height - t.oy);
+    this.lights.addChild(s);
+    return s;
   }
 
   private makeLabel(text: string, color = 0xffffff) {
@@ -250,9 +309,10 @@ export class CityScene {
     const wanted = new Map(next.houses.map((h) => [h.lotIndex, h]));
     for (const [idx, entry] of this.houseSprites) {
       const h = wanted.get(idx);
-      if (!h || h.type !== entry.house.type || h.handle !== entry.house.handle) {
+      if (!h || h.type !== entry.house.type || h.handle !== entry.house.handle || styleKey(h.style) !== styleKey(entry.house.style)) {
         entry.sprite.destroy();
         entry.label.destroy();
+        entry.glow.destroy();
         this.houseSprites.delete(idx);
       }
     }
@@ -261,18 +321,22 @@ export class CityScene {
       const lot = lots[h.lotIndex];
       if (!lot) continue;
       const variant = hashString(h.handle) % 5;
-      const t = this.tex(`b:${h.type}:${variant}`, () => drawBuilding(h.type, variant));
+      const sk = styleKey(h.style);
+      const t = this.tex(`b:${h.type}:${variant}:${sk}`, () => drawBuilding(h.type, variant, h.style));
       const sprite = new Sprite();
       this.place(sprite, t, lot.row, lot.col);
       sprite.zIndex = lot.row + lot.col + 1;
       this.objects.addChild(sprite);
       const label = this.makeLabel(`@${h.handle}`);
       this.labels.addChild(label);
-      this.houseSprites.set(h.lotIndex, { sprite, label, house: h });
+      const glow = this.glowAt("warm", lot.row + 0.5, lot.col + 0.5, Math.round(LABEL_HEIGHT[h.type] / 2.5), h.type === "predio" ? 12 : 9);
+      this.houseSprites.set(h.lotIndex, { sprite, label, house: h, glow });
     }
     for (const [idx, s] of this.signSprites) s.visible = !wanted.has(idx);
 
     this.applyPopulation(next.houses.length);
+    this.setHallStyle(next.hallStyle);
+    this.applyDarkness(next.darkness);
 
     this.hallLabel.text = next.mayorHandle ? `🏛 @${next.mayorHandle}` : "🔒 Prefeitura livre";
 
@@ -311,6 +375,19 @@ export class CityScene {
     }
   }
 
+  /** Dia e noite: escurece a cidade e acende as luzes. */
+  private applyDarkness(d: number) {
+    const lerp = (a: number, b: number, t: number) => {
+      const ch = (sh: number) => Math.round(((a >> sh) & 255) + (((b >> sh) & 255) - ((a >> sh) & 255)) * t);
+      return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+    };
+    // dia -> pôr do sol (alaranjado) -> noite (azulada)
+    const tint = d < 0.5 ? lerp(0xffffff, 0xe0a487, d * 2) : lerp(0xe0a487, 0x45549a, (d - 0.5) * 2);
+    this.world.tint = tint;
+    this.lights.alpha = Math.max(0, (d - 0.25) / 0.75);
+    this.app.renderer.background.color = d < 0.5 ? lerp(0x2f6e9e, 0x5a5a8a, d * 2) : lerp(0x5a5a8a, 0x101a33, (d - 0.5) * 2);
+  }
+
   /**
    * Quanto mais casas, mais gente na rua: cidade vazia tem 2 carros e 3
    * pessoas; cada casa nova traz mais movimento (até o limite da reserva).
@@ -332,6 +409,8 @@ export class CityScene {
     if (this.destroyed) return;
     this.elapsed += dt;
     for (const m of this.movers) {
+      const cg = this.carGlows.get(m);
+      if (cg) cg.visible = m.sprite.visible;
       if (!m.sprite.visible) continue;
       m.t += (dt * m.path.speed) / m.length;
       const p = pointOnLoop(m.path.points, m.t);
@@ -341,6 +420,16 @@ export class CityScene {
       this.place(m.sprite, t, p.r - 0.5, p.c - 0.5);
       if (m.path.kind === "person") m.sprite.y -= Math.floor(this.elapsed * 6 + m.path.offset * 10) % 2;
       m.sprite.zIndex = p.r + p.c + 0.01;
+      if (m.path.kind === "car" && this.lights.alpha > 0) {
+        let glow = this.carGlows.get(m);
+        if (!glow) {
+          glow = this.glowAt("car", 0, 0, 0, 6);
+          this.carGlows.set(m, glow);
+        }
+        const t = this.cache.get("glow:car:6")!;
+        glow.x = Math.round(this.wx(p.r + p.dr * 0.35, p.c + p.dc * 0.35) - t.ox);
+        glow.y = Math.round(this.wy(p.r + p.dr * 0.35, p.c + p.dc * 0.35) - 2 - t.oy);
+      }
     }
     const pulse = 0.55 + 0.45 * Math.sin(this.elapsed * 5);
     for (const s of this.highlightSprites) s.alpha = (s as Sprite & { __picked?: boolean }).__picked ? 1 : pulse;
@@ -357,13 +446,13 @@ export class CityScene {
       }
       const x = this.wx(lot.row + 0.5, lot.col + 0.5);
       const y = this.wy(lot.row + 0.5, lot.col + 0.5) - LABEL_HEIGHT[house.type];
-      label.x = Math.round(x * this.zoom + this.world.x);
-      label.y = Math.round(y * this.zoom + this.world.y);
+      label.x = Math.round(x * this.zoom + this.camera.x);
+      label.y = Math.round(y * this.zoom + this.camera.y);
       label.visible = true;
     }
     const h = this.layout.cityHall;
-    this.hallLabel.x = Math.round(this.wx(h.row + 1, h.col + 1) * this.zoom + this.world.x);
-    this.hallLabel.y = Math.round((this.wy(h.row + 1, h.col + 1) - 56) * this.zoom + this.world.y);
+    this.hallLabel.x = Math.round(this.wx(h.row + 1, h.col + 1) * this.zoom + this.camera.x);
+    this.hallLabel.y = Math.round((this.wy(h.row + 1, h.col + 1) - 56) * this.zoom + this.camera.y);
     this.hallLabel.visible = this.zoom >= 1.2;
   }
 
@@ -385,20 +474,20 @@ export class CityScene {
 
   private centerOn(r: number, c: number, zoom: number) {
     this.zoom = Math.min(this.maxZoom, Math.max(this.minZoom, zoom));
-    this.world.scale.set(this.zoom);
-    this.world.x = this.viewW / 2 - this.wx(r, c) * this.zoom;
-    this.world.y = this.viewH / 2 - this.wy(r, c) * this.zoom;
+    this.camera.scale.set(this.zoom);
+    this.camera.x = this.viewW / 2 - this.wx(r, c) * this.zoom;
+    this.camera.y = this.viewH / 2 - this.wy(r, c) * this.zoom;
     this.clampCamera();
   }
 
   private zoomAt(sx: number, sy: number, newZoom: number) {
     const z = Math.min(this.maxZoom, Math.max(this.minZoom, newZoom));
-    const wxp = (sx - this.world.x) / this.zoom;
-    const wyp = (sy - this.world.y) / this.zoom;
+    const wxp = (sx - this.camera.x) / this.zoom;
+    const wyp = (sy - this.camera.y) / this.zoom;
     this.zoom = z;
-    this.world.scale.set(z);
-    this.world.x = sx - wxp * z;
-    this.world.y = sy - wyp * z;
+    this.camera.scale.set(z);
+    this.camera.x = sx - wxp * z;
+    this.camera.y = sy - wyp * z;
     this.clampCamera();
   }
 
@@ -406,8 +495,8 @@ export class CityScene {
     const w = this.worldW * this.zoom;
     const h = this.worldH * this.zoom;
     const pad = 80;
-    this.world.x = Math.min(this.viewW - pad, Math.max(pad - w, this.world.x));
-    this.world.y = Math.min(this.viewH - pad, Math.max(pad - h, this.world.y));
+    this.camera.x = Math.min(this.viewW - pad, Math.max(pad - w, this.camera.x));
+    this.camera.y = Math.min(this.viewH - pad, Math.max(pad - h, this.camera.y));
   }
 
   zoomBy(factor: number) {
@@ -449,15 +538,15 @@ export class CityScene {
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         // arrasta junto com o meio dos dedos
-        this.world.x += (p.x - prev.x) / 2;
-        this.world.y += (p.y - prev.y) / 2;
+        this.camera.x += (p.x - prev.x) / 2;
+        this.camera.y += (p.y - prev.y) / 2;
         this.zoomAt(mid.x, mid.y, this.gesture.pinchZoom! * (dist / this.gesture.pinchDist));
         return;
       }
       if (Math.hypot(p.x - this.gesture.startX, p.y - this.gesture.startY) > 6) this.gesture.moved = true;
       if (this.gesture.moved) {
-        this.world.x += p.x - prev.x;
-        this.world.y += p.y - prev.y;
+        this.camera.x += p.x - prev.x;
+        this.camera.y += p.y - prev.y;
         this.clampCamera();
       }
     };
@@ -495,8 +584,8 @@ export class CityScene {
   }
 
   private handleTap(sx: number, sy: number) {
-    const x = (sx - this.world.x) / this.zoom;
-    const y = (sy - this.world.y) / this.zoom;
+    const x = (sx - this.camera.x) / this.zoom;
+    const y = (sy - this.camera.y) / this.zoom;
 
     if (this.state.mode === "view") {
       // primeiro, prédios altos (o toque pode cair no telhado)
