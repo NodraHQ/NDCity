@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: SITE_NAME,
-  description: "Uma cidadezinha em pixel art onde cada seguidor resgata sua casinha.",
+  description: "O Brasil em pixel art: cada seguidor resgata uma casinha na sua cidade.",
 };
 
 export const viewport: Viewport = {

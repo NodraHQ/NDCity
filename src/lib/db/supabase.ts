@@ -1,7 +1,21 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { BuildingType } from "@/lib/buildings";
 import type { Style } from "@/lib/styles";
-import type { City, Claim, ClaimResult, Code, Entitlement, Feature, Message, MoveResult, Store } from "./types";
+import type {
+  City,
+  Claim,
+  ClaimResult,
+  Code,
+  Election,
+  Entitlement,
+  Feature,
+  HallProposal,
+  HouseRow,
+  Message,
+  MoveResult,
+  Office,
+  Store,
+} from "./types";
 
 /**
  * Acesso ao Supabase. Só roda no servidor, com a chave secreta.
@@ -142,12 +156,42 @@ export const supabaseStore: Store = {
     if (!res.ok || !res.claim) return { ok: false, error: (res.error ?? "code_not_found") as never };
     return { ok: true, claim: toClaim(res.claim), isMayor: !!res.is_mayor };
   },
-  async moveHouse({ handle, citySlug, lotIndex, lotCount }): Promise<MoveResult> {
+  async moveHouse({ handle, citySlug, lotIndex, lotCount, buildingType }): Promise<MoveResult> {
     const res = check(
-      await db().rpc("move_house", { p_handle: handle, p_city_slug: citySlug, p_lot_index: lotIndex, p_lot_count: lotCount }),
+      await db().rpc("move_house", {
+        p_handle: handle,
+        p_city_slug: citySlug,
+        p_lot_index: lotIndex,
+        p_lot_count: lotCount,
+        p_building: buildingType,
+      }),
     ) as { ok: boolean; error?: string; claim?: ClaimRow; is_mayor?: boolean };
     if (!res.ok || !res.claim) return { ok: false, error: (res.error ?? "no_house") as never };
     return { ok: true, claim: toClaim(res.claim), isMayor: !!res.is_mayor };
+  },
+  async listAllHouses() {
+    const rows = check(
+      await db().from("claims").select("instagram_handle, building_type, created_at, cities(slug, name, uf, mayor_handle)").limit(20000),
+    ) as unknown as {
+      instagram_handle: string;
+      building_type: string;
+      created_at: string;
+      cities: { slug: string; name: string; uf: string | null; mayor_handle: string | null } | null;
+    }[];
+    return rows.map<HouseRow>((r) => ({
+      handle: r.instagram_handle,
+      type: r.building_type as BuildingType,
+      createdAt: r.created_at,
+      citySlug: r.cities?.slug ?? "",
+      cityName: r.cities?.name ?? "",
+      uf: r.cities?.uf ?? null,
+      isMayor: r.cities?.mayor_handle === r.instagram_handle,
+    }));
+  },
+  async countResidents(cityId) {
+    const res = await db().from("claims").select("id", { count: "exact", head: true }).eq("city_id", cityId);
+    if (res.error) throw new Error(`Supabase: ${res.error.message}`);
+    return res.count ?? 0;
   },
   async setHouseStyle(handle, style) {
     check(await db().from("claims").update({ style }).eq("instagram_handle", handle));
@@ -217,4 +261,134 @@ export const supabaseStore: Store = {
     ) as { id: number; handle: string; body: string; created_at: string };
     return { id: r.id, handle: r.handle, body: r.body, createdAt: r.created_at };
   },
+
+  async createElection(office, uf, endsAt) {
+    const r = check(await db().from("elections").insert({ office, uf, ends_at: endsAt }).select("*").single()) as ElectionRow;
+    return toElection(r);
+  },
+  async listElections(status) {
+    let q = db().from("elections").select("*").order("created_at", { ascending: false }).limit(200);
+    if (status) q = q.eq("status", status);
+    return (check(await q) as ElectionRow[]).map(toElection);
+  },
+  async getElection(id) {
+    const r = check(await db().from("elections").select("*").eq("id", id).maybeSingle()) as ElectionRow | null;
+    return r ? toElection(r) : null;
+  },
+  async updateElection(id, patch) {
+    const upd: Record<string, unknown> = { status: patch.status };
+    if (patch.status !== "open") upd.closed_at = new Date().toISOString();
+    if (patch.winnerHandle !== undefined) upd.winner_handle = patch.winnerHandle;
+    check(await db().from("elections").update(upd).eq("id", id));
+  },
+  async addCandidate(electionId, handle) {
+    check(await db().from("election_candidates").upsert({ election_id: electionId, handle }, { ignoreDuplicates: true }));
+  },
+  async removeCandidate(electionId, handle) {
+    check(await db().from("election_candidates").delete().eq("election_id", electionId).eq("handle", handle));
+    check(await db().from("election_votes").delete().eq("election_id", electionId).eq("candidate", handle));
+  },
+  async listCandidates(electionId) {
+    const rows = check(await db().from("election_candidates").select("handle, created_at").eq("election_id", electionId)) as {
+      handle: string;
+      created_at: string;
+    }[];
+    return rows.map((r) => ({ handle: r.handle, createdAt: r.created_at }));
+  },
+  async castVote(electionId, voter, candidate) {
+    check(await db().from("election_votes").upsert({ election_id: electionId, voter, candidate, created_at: new Date().toISOString() }));
+  },
+  async getVote(electionId, voter) {
+    const r = check(
+      await db().from("election_votes").select("candidate").eq("election_id", electionId).eq("voter", voter).maybeSingle(),
+    ) as { candidate: string } | null;
+    return r?.candidate ?? null;
+  },
+  async countVotes(electionId) {
+    const rows = check(await db().from("election_votes").select("candidate").eq("election_id", electionId)) as { candidate: string }[];
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.candidate] = (out[r.candidate] ?? 0) + 1;
+    return out;
+  },
+  async listOffices() {
+    const rows = check(await db().from("offices").select("*")) as { office: Office; uf: string; holder_handle: string; since: string }[];
+    return rows.map((r) => ({ office: r.office, uf: r.uf, handle: r.holder_handle, since: r.since }));
+  },
+  async setOffice(office, uf, handle, electionId) {
+    check(
+      await db()
+        .from("offices")
+        .upsert({ office, uf, holder_handle: handle, election_id: electionId, since: new Date().toISOString() }),
+    );
+  },
+  async clearOffice(office, uf) {
+    check(await db().from("offices").delete().eq("office", office).eq("uf", uf));
+  },
+
+  async getOpenProposal(cityId) {
+    const r = check(
+      await db().from("hall_proposals").select("*").eq("city_id", cityId).eq("status", "open").maybeSingle(),
+    ) as ProposalRow | null;
+    return r ? toProposal(r) : null;
+  },
+  async createProposal(cityId, proposer, style, endsAt) {
+    const r = check(
+      await db().from("hall_proposals").insert({ city_id: cityId, proposer, style, ends_at: endsAt }).select("*").single(),
+    ) as ProposalRow;
+    return toProposal(r);
+  },
+  async updateProposal(id, status) {
+    check(await db().from("hall_proposals").update({ status, resolved_at: new Date().toISOString() }).eq("id", id));
+  },
+  async castHallVote(proposalId, handle, approve) {
+    check(await db().from("hall_votes").upsert({ proposal_id: proposalId, handle, approve }));
+  },
+  async getHallVote(proposalId, handle) {
+    const r = check(
+      await db().from("hall_votes").select("approve").eq("proposal_id", proposalId).eq("handle", handle).maybeSingle(),
+    ) as { approve: boolean } | null;
+    return r ? r.approve : null;
+  },
+  async countHallVotes(proposalId) {
+    const rows = check(await db().from("hall_votes").select("approve").eq("proposal_id", proposalId)) as { approve: boolean }[];
+    return { yes: rows.filter((r) => r.approve).length, no: rows.filter((r) => !r.approve).length };
+  },
 };
+
+type ElectionRow = {
+  id: string;
+  office: Office;
+  uf: string | null;
+  status: Election["status"];
+  ends_at: string;
+  winner_handle: string | null;
+  created_at: string;
+};
+const toElection = (r: ElectionRow): Election => ({
+  id: r.id,
+  office: r.office,
+  uf: r.uf,
+  status: r.status,
+  endsAt: r.ends_at,
+  winnerHandle: r.winner_handle,
+  createdAt: r.created_at,
+});
+
+type ProposalRow = {
+  id: string;
+  city_id: string;
+  proposer: string;
+  style: Style;
+  status: HallProposal["status"];
+  ends_at: string;
+  created_at: string;
+};
+const toProposal = (r: ProposalRow): HallProposal => ({
+  id: r.id,
+  cityId: r.city_id,
+  proposer: r.proposer,
+  style: r.style,
+  status: r.status,
+  endsAt: r.ends_at,
+  createdAt: r.created_at,
+});

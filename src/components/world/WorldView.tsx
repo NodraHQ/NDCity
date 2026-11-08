@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SITE_NAME } from "@/config/site";
 import { findCity, searchCities } from "@/lib/geo/cities";
 import { localTime } from "@/lib/sun";
+import ElectionCard, { type ElectionV, officeTitle } from "../ElectionCard";
 import type { ActiveInfo } from "./scene";
 
 const WorldCanvas = dynamic(() => import("./WorldCanvas"), {
@@ -22,11 +23,21 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
   const [query, setQuery] = useState("");
   const [me, setMe] = useState<Me>(null);
   const zoomRef = useRef<((f: number) => void) | null>(null);
+  const [offices, setOffices] = useState<{ president: string | null; governors: Record<string, string> } | null>(null);
+  const [elections, setElections] = useState<ElectionV[]>([]);
+  const [showElections, setShowElections] = useState(false);
 
   useEffect(() => {
     fetch("/api/me")
       .then((r) => r.json())
       .then((j) => setMe(j.resident))
+      .catch(() => {});
+    fetch("/api/civic")
+      .then((r) => r.json())
+      .then((j) => {
+        setOffices(j.offices);
+        setElections(j.elections ?? []);
+      })
       .catch(() => {});
     const id = setInterval(async () => {
       const r = await fetch("/api/cities", { cache: "no-store" });
@@ -41,6 +52,8 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
   const city = selected ? findCity(selected) : null;
   const info = selected ? activeMap.get(selected) : undefined;
   const myCity = me?.citySlug ? findCity(me.citySlug) : null;
+  const myElections = elections.filter((e) => e.status === "open" && e.canParticipate);
+  const governor = city ? (offices?.governors[city.uf] ?? null) : null;
 
   function choose(slug: string) {
     setSelected(slug);
@@ -82,7 +95,28 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
         </div>
       </header>
 
-      {myCity && !selected && (
+      {offices?.president && (
+        <div className="authorities">
+          <div className="authority">🇧🇷 Presidente<br /><b>@{offices.president}</b></div>
+        </div>
+      )}
+
+      {!selected && myElections.length > 0 && !showElections && (
+        <button className="banner vote" onClick={() => setShowElections(true)}>
+          🗳 Eleição aberta: {officeTitle(myElections[0])}. <b>Toque para participar!</b>
+        </button>
+      )}
+      {showElections && (
+        <div className="sheet tall">
+          <button className="close" onClick={() => setShowElections(false)} aria-label="Fechar">✕</button>
+          <h3>🗳 Eleições</h3>
+          {elections.filter((e) => e.status === "open").map((e) => (
+            <ElectionCard key={e.id} election={e} onChange={(ne) => setElections((l) => l.map((x) => (x.id === ne.id ? ne : x)))} />
+          ))}
+        </div>
+      )}
+
+      {myCity && !selected && !showElections && (
         <Link className="btn primary my-city" href={`/c/${myCity.slug}`}>
           🏠 Minha cidade: {myCity.name}
         </Link>
@@ -109,6 +143,7 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
           ) : (
             <p>🔒 Ninguém mora aqui ainda. Quem resgatar a primeira casinha vira <b>prefeito</b> e libera a cidade!</p>
           )}
+          {governor && <p className="muted">Governador(a) de {city.uf}: <b>@{governor}</b></p>}
           <div className="row">
             <Link className="btn primary" href={`/c/${city.slug}`}>Visitar {city.name} →</Link>
           </div>

@@ -190,3 +190,43 @@ th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #ddd5c4; w
 select { font-family: var(--font); font-size: 15px; border: 3px solid var(--border); padding: 10px; background: #fff; border-radius: 0; color: var(--ink); }
 .title-row .title { min-width: 0; }
 .title-row .title span { overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- admin v2 */
+.admin.wide { max-width: 1000px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.stat { background: var(--panel); border: 3px solid var(--border); box-shadow: 3px 3px 0 var(--border); padding: 10px; display: flex; flex-direction: column; }
+.stat b { font-size: 20px; overflow: hidden; text-overflow: ellipsis; }
+.stat span { font-size: 12px; color: var(--muted); }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.filters > * { flex: 1; min-width: 140px; }
+.filters input { font-size: 15px; padding: 9px; }
+tr.sel td { background: #fff1c2; }
+.admin tbody tr { cursor: default; }
+.admin td a { color: var(--ink); }
+.bar { position: relative; display: inline-block; width: 120px; height: 16px; border: 2px solid var(--border); background: #fff; vertical-align: middle; }
+.bar > span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
+.bar em { position: relative; font-style: normal; font-size: 11px; padding-left: 4px; }
+.row.between { justify-content: space-between; }
+.row.left { justify-content: flex-start; }
+.election { border: 2px solid var(--border); padding: 10px; margin: 8px 0; background: #fff; }
+.election ul { margin: 6px 0; padding-left: 18px; font-size: 13px; }
+.candidates { list-style: none; padding: 0 !important; display: flex; flex-direction: column; gap: 6px; }
+.candidates li { display: flex; align-items: center; gap: 8px; }
+.candidates li > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.candidates li.mine > span:first-child { font-weight: bold; }
+.candidates .bar { width: 80px; }
+
+/* ---------- bandeira */
+.flag-editor { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.flag-editor select { font-size: 13px; padding: 4px; border-width: 2px; }
+.flag-grid { display: grid; gap: 1px; background: var(--border); border: 2px solid var(--border); width: min(100%, 300px); touch-action: none; }
+.flag-grid button { aspect-ratio: 1; border: none; padding: 0; cursor: pointer; }
+.palette.small .swatch { width: 22px; height: 22px; }
+.sheet.tall { max-height: calc(100% - 100px); overflow-y: auto; }
+.authorities { position: absolute; left: 16px; top: 96px; display: flex; flex-direction: column; gap: 6px; }
+.authority { background: var(--panel); border: 3px solid var(--border); box-shadow: 3px 3px 0 var(--border); padding: 6px 10px; font-size: 12px; }
+.authority b { font-size: 13px; }
+.banner.vote { top: auto; bottom: 76px; cursor: pointer; }
+button.banner { font-family: var(--font); font-size: 13px; color: var(--accent-ink); width: calc(100% - 32px); }
+.city-page:has(.my-city) .banner.vote, .city-page:has(.chat-fab) .banner.vote { bottom: 70px; }

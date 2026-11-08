@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isBuildingType } from "@/lib/buildings";
 import { ensureCityRow, lotCountFor } from "@/lib/city-data";
 import { getStore } from "@/lib/db";
 import { currentResident } from "@/lib/resident";
@@ -12,12 +13,12 @@ const ERRORS: Record<string, string> = {
   lot_taken: "Alguém acabou de pegar esse lote! Escolha outro.",
 };
 
-/** Mudança de cidade (gasta 1 crédito de mudança). */
+/** Mudança de cidade (gasta 1 crédito; pode trocar o tipo de construção). */
 export async function POST(req: Request) {
   const r = await currentResident();
   if (!r?.house) return NextResponse.json({ ok: false, message: "Entre na sua conta primeiro." }, { status: 401 });
   const body = await req.json().catch(() => null);
-  const { citySlug, lotIndex } = body ?? {};
+  const { citySlug, lotIndex, buildingType } = body ?? {};
   if (typeof citySlug !== "string" || !Number.isInteger(lotIndex))
     return NextResponse.json({ ok: false, message: "Pedido inválido." }, { status: 400 });
 
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
     citySlug,
     lotIndex,
     lotCount: lotCountFor(city.seed, city.layoutSize),
+    buildingType: isBuildingType(buildingType) ? buildingType : null,
   });
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error, message: ERRORS[res.error] });
   return NextResponse.json({ ok: true, lotIndex: res.claim.lotIndex, isMayor: res.isMayor });

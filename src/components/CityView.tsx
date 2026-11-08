@@ -11,6 +11,8 @@ import { type ProductId, PRODUCTS, formatPrice } from "@/lib/payments/products";
 import { PALETTE, STYLE_PARTS, type Style } from "@/lib/styles";
 import { darknessFor, localTime, sunElevation } from "@/lib/sun";
 import ChatPanel from "./ChatPanel";
+import ElectionCard, { type ElectionV, officeTitle } from "./ElectionCard";
+import FlagEditor from "./FlagEditor";
 
 const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
   ssr: false,
@@ -18,19 +20,24 @@ const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
 });
 
 type Perks = { chatUntil: string | null; customize: boolean; moveCredits: number };
+type ProposalV = { id: string; proposer: string; style: Style; endsAt: string; yes: number; no: number; residents: number; myVote: boolean | null; canVote: boolean };
+type Civic = { offices: { president: string | null; governors: Record<string, string> }; elections: ElectionV[] };
 type Me = { handle: string; citySlug: string | null; perks: Perks } | null;
 
 type Step =
   | { name: "idle" }
   | { name: "code"; error?: string; busy?: boolean }
   | { name: "login"; error?: string; busy?: boolean }
-  | { name: "type"; code: string; handle: string }
+  | { name: "type"; purpose: "claim" | "move"; code: string; handle: string }
   | { name: "lot"; purpose: "claim" | "move"; code: string; handle: string; type: BuildingType | null; lot: number | null; error?: string; busy?: boolean }
   | { name: "done"; handle: string; isMayor: boolean; moved?: boolean }
   | { name: "menu" }
   | { name: "chat" }
   | { name: "customize"; target: "house" | "hall"; style: Style; busy?: boolean; error?: string }
-  | { name: "paywall"; product: ProductId; message?: string; busy?: boolean };
+  | { name: "paywall"; product: ProductId; message?: string; busy?: boolean }
+  | { name: "proposal"; busy?: boolean; error?: string }
+  | { name: "elections" }
+  | { name: "notice"; title: string; text: string };
 
 type Info = { kind: "house"; lotIndex: number } | { kind: "hall" } | { kind: "free" } | null;
 
@@ -71,6 +78,8 @@ export default function CityView({ initial }: { initial: CityData }) {
   const [focusLot, setFocusLot] = useState<number | null>(null);
   const [codeInput, setCodeInput] = useState("");
   const [clock, setClock] = useState("");
+  const [proposal, setProposal] = useState<ProposalV | null>(null);
+  const [civic, setCivic] = useState<Civic | null>(null);
   const zoomRef = useRef<((f: number) => void) | null>(null);
   const { city } = data;
   const slug = city.slug;
@@ -85,12 +94,24 @@ export default function CityView({ initial }: { initial: CityData }) {
     const res = await fetch("/api/me", { cache: "no-store" });
     if (res.ok) setMe((await res.json()).resident);
   }, []);
+  const refreshCivic = useCallback(async () => {
+    const [p, c] = await Promise.all([
+      fetch(`/api/proposal/${slug}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch("/api/civic", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]);
+    if (p) setProposal(p.proposal);
+    if (c?.offices) setCivic(c);
+  }, [slug]);
 
   useEffect(() => {
     refreshMe();
-    const id = setInterval(refresh, 20_000);
+    refreshCivic();
+    const id = setInterval(() => {
+      refresh();
+      refreshCivic();
+    }, 20_000);
     return () => clearInterval(id);
-  }, [refresh, refreshMe]);
+  }, [refresh, refreshMe, refreshCivic]);
 
   useEffect(() => {
     const tick = () => setClock(localTime(city.timezone));
@@ -112,7 +133,15 @@ export default function CityView({ initial }: { initial: CityData }) {
     if (step.name !== "customize" || step.target !== "house" || !me) return data.houses;
     return data.houses.map((h) => (h.handle === me.handle ? { ...h, style: step.style } : h));
   }, [data.houses, step, me]);
-  const shownHallStyle = step.name === "customize" && step.target === "hall" ? step.style : city.hallStyle;
+  const shownHallStyle =
+    step.name === "customize" && step.target === "hall"
+      ? step.style
+      : step.name === "proposal" && proposal
+        ? proposal.style
+        : city.hallStyle;
+  const governor = city.uf ? (civic?.offices.governors[city.uf] ?? null) : null;
+  const president = civic?.offices.president ?? null;
+  const myElections = (civic?.elections ?? []).filter((e) => e.status === "open" && e.canParticipate);
 
   // ------------------------------------------------------------ ações
 
@@ -121,7 +150,7 @@ export default function CityView({ initial }: { initial: CityData }) {
     setStep({ name: "code", busy: true });
     const json = await postJSON("/api/claim/check", { code: codeInput });
     if (!json.ok) return setStep({ name: "code", error: json.message });
-    setStep({ name: "type", code: json.code, handle: json.handle });
+    setStep({ name: "type", purpose: "claim", code: json.code, handle: json.handle });
   }
 
   async function submitLogin(e: React.FormEvent) {
@@ -147,7 +176,7 @@ export default function CityView({ initial }: { initial: CityData }) {
     const json =
       step.purpose === "claim"
         ? await postJSON("/api/claim", { code: step.code, citySlug: slug, lotIndex: step.lot, buildingType: step.type })
-        : await postJSON("/api/me/move", { citySlug: slug, lotIndex: step.lot });
+        : await postJSON("/api/me/move", { citySlug: slug, lotIndex: step.lot, buildingType: step.type });
     await refresh();
     if (!json.ok) {
       if (json.error === "lot_taken") return setStep({ ...step, lot: null, busy: false, error: json.message });
@@ -172,7 +201,7 @@ export default function CityView({ initial }: { initial: CityData }) {
     if (!me) return;
     if (me.perks.moveCredits < 1) return setStep({ name: "paywall", product: "mudanca" });
     setInfo(null);
-    setStep({ name: "lot", purpose: "move", code: "", handle: me.handle, type: null, lot: null });
+    setStep({ name: "type", purpose: "move", code: "", handle: me.handle });
   }
 
   function openChat() {
@@ -191,8 +220,19 @@ export default function CityView({ initial }: { initial: CityData }) {
     setStep({ ...step, busy: true, error: undefined });
     const json = await postJSON("/api/me/style", { target: step.target, style: step.style });
     if (!json.ok) return setStep({ ...step, busy: false, error: json.message });
+    await Promise.all([refresh(), refreshCivic()]);
+    if (step.target === "hall") setStep({ name: "notice", title: "🏛 Prefeitura", text: json.message });
+    else setStep({ name: "idle" });
+  }
+
+  async function voteProposal(approve: boolean) {
+    setStep({ name: "proposal", busy: true });
+    const json = await postJSON(`/api/proposal/${slug}`, { approve });
+    if (!json.ok) return setStep({ name: "proposal", error: json.message });
     await refresh();
-    setStep({ name: "idle" });
+    setProposal(json.proposal);
+    if (json.decided) setStep({ name: "notice", title: "🗳 Votação encerrada", text: "A maioria decidiu! Confira a prefeitura." });
+    else setStep({ name: "proposal" });
   }
 
   async function buy(product: ProductId) {
@@ -285,6 +325,18 @@ export default function CityView({ initial }: { initial: CityData }) {
       )}
       {data.storeKind === "memory" && <div className="banner small warn">Modo teste: sem banco de dados, nada fica salvo.</div>}
 
+      {step.name === "idle" && !info && proposal && (
+        <button className="banner vote" onClick={() => setStep({ name: "proposal" })}>
+          📜 @{proposal.proposer} quer pintar a prefeitura.{" "}
+          {proposal.canVote ? (proposal.myVote == null ? <b>Toque para votar!</b> : "Você já votou.") : "Toque para ver."}
+        </button>
+      )}
+      {step.name === "idle" && !info && !proposal && myElections.length > 0 && (
+        <button className="banner vote" onClick={() => setStep({ name: "elections" })}>
+          🗳 Eleição aberta: {officeTitle(myElections[0])}. <b>Toque para participar!</b>
+        </button>
+      )}
+
       {livesHere && step.name === "idle" && (
         <button className="btn chat-fab" onClick={openChat}>💬 Chat de {city.name}</button>
       )}
@@ -316,7 +368,16 @@ export default function CityView({ initial }: { initial: CityData }) {
               ) : (
                 <p>A prefeitura está vaga. Quem chegar primeiro ganha a prefeitura como troféu!</p>
               )}
-              {isMayor && <button className="btn" onClick={() => { setInfo(null); openCustomize("hall"); }}>🎨 Pintar a prefeitura</button>}
+              {(governor || president) && (
+                <p>
+                  {governor && <>Governador(a) de {city.uf}: <b>@{governor}</b><br /></>}
+                  {president && <>Presidente: <b>@{president}</b></>}
+                </p>
+              )}
+              <div className="row wrap left">
+                {isMayor && <button className="btn" onClick={() => { setInfo(null); openCustomize("hall"); }}>🎨 Propor nova pintura</button>}
+                {proposal && <button className="btn" onClick={() => { setInfo(null); setStep({ name: "proposal" }); }}>📜 Ver votação</button>}
+              </div>
             </>
           )}
           {info.kind === "free" && (
@@ -379,11 +440,11 @@ export default function CityView({ initial }: { initial: CityData }) {
       {step.name === "type" && (
         <div className="modal-bg">
           <div className="modal">
-            <h2>Olá, @{step.handle}! 👋</h2>
-            <p>O que você quer construir?</p>
+            <h2>{step.purpose === "move" ? "🚚 Mudança" : `Olá, @${step.handle}! 👋`}</h2>
+            <p>{step.purpose === "move" ? `O que você quer construir em ${city.name}? Pode trocar o tipo!` : "O que você quer construir?"}</p>
             <div className="types">
               {BUILDING_TYPES.map((b) => (
-                <button key={b.id} className="btn type" onClick={() => setStep({ name: "lot", purpose: "claim", code: step.code, handle: step.handle, type: b.id, lot: null })}>
+                <button key={b.id} className="btn type" onClick={() => setStep({ name: "lot", purpose: step.purpose, code: step.code, handle: step.handle, type: b.id, lot: null })}>
                   <span className="emoji">{b.emoji}</span>
                   {b.label}
                 </button>
@@ -404,7 +465,7 @@ export default function CityView({ initial }: { initial: CityData }) {
           {step.purpose === "move" && <p className="muted">Isso usa 1 caminhão de mudança. Sua casa sai da cidade antiga.</p>}
           {step.error && <p className="error">{step.error}</p>}
           <div className="row wrap">
-            <button className="btn" disabled={step.busy} onClick={() => setStep(step.purpose === "move" ? { name: "idle" } : { name: "type", code: step.code, handle: step.handle })}>← Voltar</button>
+            <button className="btn" disabled={step.busy} onClick={() => setStep({ name: "type", purpose: step.purpose, code: step.code, handle: step.handle })}>← Voltar</button>
             <button className="btn" onClick={pickRandom} disabled={step.busy}>🎲 Escolher pra mim</button>
             <button className="btn primary" onClick={confirmLot} disabled={step.lot == null || step.busy}>{step.busy ? "Construindo…" : "Confirmar"}</button>
           </div>
@@ -442,7 +503,9 @@ export default function CityView({ initial }: { initial: CityData }) {
             {myHouse && <button className="btn" onClick={() => { setFocusLot(null); setTimeout(() => setFocusLot(myHouse.lotIndex)); setStep({ name: "idle" }); }}>📍 Ver minha casa</button>}
             <button className="btn" onClick={openChat}>💬 Chat {me.perks.chatUntil ? "" : "🔒"}</button>
             <button className="btn" onClick={() => openCustomize("house")}>🎨 Pintar minha casa {me.perks.customize ? "" : "🔒"}</button>
-            {isMayor && <button className="btn" onClick={() => openCustomize("hall")}>🏛 Pintar a prefeitura {me.perks.customize ? "" : "🔒"}</button>}
+            {isMayor && <button className="btn" onClick={() => openCustomize("hall")}>🏛 Propor pintura da prefeitura {me.perks.customize ? "" : "🔒"}</button>}
+            {myElections.length > 0 && <button className="btn" onClick={() => setStep({ name: "elections" })}>🗳 Eleições ({myElections.length})</button>}
+            {proposal && <button className="btn" onClick={() => setStep({ name: "proposal" })}>📜 Votação da prefeitura</button>}
             <Link className="btn" href="/">🚚 Mudar de cidade{me.perks.moveCredits ? ` (${me.perks.moveCredits})` : " 🔒"}</Link>
             <button className="btn" onClick={logout}>Sair</button>
           </div>
@@ -455,9 +518,10 @@ export default function CityView({ initial }: { initial: CityData }) {
 
       {/* ---------- personalizar */}
       {step.name === "customize" && (
-        <div className="sheet">
-          <h3>{step.target === "hall" ? "🏛 Pintar a prefeitura" : "🎨 Pintar minha casa"}</h3>
-          {STYLE_PARTS.map((part) => (
+        <div className="sheet tall">
+          <h3>{step.target === "hall" ? "🏛 Proposta para a prefeitura" : "🎨 Pintar minha casa"}</h3>
+          {step.target === "hall" && <p className="muted">Você escolhe; os moradores votam sim ou não (24h). Mais da metade decide.</p>}
+          {STYLE_PARTS.filter((part) => step.target === "house" || part.key !== "roof").map((part) => (
             <div key={part.key} className="palette-row">
               <span>{step.target === "hall" ? part.hallLabel : part.label}</span>
               <div className="palette">
@@ -468,10 +532,71 @@ export default function CityView({ initial }: { initial: CityData }) {
               </div>
             </div>
           ))}
+          <div className="palette-row">
+            <span>Bandeira</span>
+            <FlagEditor value={step.style.flag} defaultUf={city.uf} onChange={(flag) => setStep({ ...step, style: { ...step.style, flag } })} />
+          </div>
           {step.error && <p className="error">{step.error}</p>}
           <div className="row">
             <button className="btn" onClick={() => setStep({ name: "idle" })} disabled={step.busy}>Cancelar</button>
-            <button className="btn primary" onClick={saveStyle} disabled={step.busy}>{step.busy ? "Salvando…" : "Salvar"}</button>
+            <button className="btn primary" onClick={saveStyle} disabled={step.busy}>
+              {step.busy ? "Enviando…" : step.target === "hall" ? "Propor aos moradores" : "Salvar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- votação da prefeitura */}
+      {step.name === "proposal" && (
+        <div className="sheet">
+          <button className="close" onClick={() => setStep({ name: "idle" })} aria-label="Fechar">✕</button>
+          {proposal ? (
+            <>
+              <h3>📜 Nova pintura da prefeitura</h3>
+              <p>
+                O(a) prefeito(a) <b>@{proposal.proposer}</b> propôs a pintura que aparece agora no mapa. Mais da metade dos {proposal.residents}{" "}
+                moradores precisa aprovar.
+              </p>
+              <p>
+                👍 {proposal.yes} · 👎 {proposal.no} · termina {new Date(proposal.endsAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </p>
+              {step.error && <p className="error">{step.error}</p>}
+              {proposal.canVote ? (
+                <div className="row">
+                  <button className={`btn ${proposal.myVote === false ? "primary" : ""}`} disabled={step.busy} onClick={() => voteProposal(false)}>👎 Não</button>
+                  <button className={`btn ${proposal.myVote === true ? "primary" : ""}`} disabled={step.busy} onClick={() => voteProposal(true)}>👍 Sim</button>
+                </div>
+              ) : (
+                <p className="muted">Só moradores de {city.name} votam.</p>
+              )}
+            </>
+          ) : (
+            <p>Nenhuma votação aberta.</p>
+          )}
+        </div>
+      )}
+
+      {/* ---------- eleições */}
+      {step.name === "elections" && (
+        <div className="sheet tall">
+          <button className="close" onClick={() => setStep({ name: "idle" })} aria-label="Fechar">✕</button>
+          <h3>🗳 Eleições</h3>
+          {(civic?.elections ?? []).filter((e) => e.status === "open").map((e) => (
+            <ElectionCard
+              key={e.id}
+              election={e}
+              onChange={(ne) => setCivic((c) => (c ? { ...c, elections: c.elections.map((x) => (x.id === ne.id ? ne : x)) } : c))}
+            />
+          ))}
+        </div>
+      )}
+
+      {step.name === "notice" && (
+        <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{step.title}</h2>
+            <p>{step.text}</p>
+            <div className="row"><button className="btn primary" onClick={() => setStep({ name: "idle" })}>OK</button></div>
           </div>
         </div>
       )}

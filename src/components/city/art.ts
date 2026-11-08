@@ -2,7 +2,7 @@ import { Graphics } from "pixi.js";
 import type { BuildingType } from "@/lib/buildings";
 import type { CityLayout, Decoration, TileKind } from "@/lib/city/generate";
 import { createRng } from "@/lib/city/rng";
-import { type Style, hexToNum } from "@/lib/styles";
+import { FLAG_H, FLAG_W, type Style, flagColors, hexToNum } from "@/lib/styles";
 
 /**
  * Desenhos em pixel art feitos 100% por código (formas simples), sem
@@ -181,7 +181,30 @@ function finish(iso: Iso): Drawing {
   return { g: iso.g, width: iso.width, height: iso.height, ox: iso.n * (TW / 2), oy: iso.head };
 }
 
+/** Pinta uma bandeira (12x8) em pixels. step=2 desenha em tamanho pequeno (6x4). */
+function paintFlag(g: Graphics, x: number, y: number, flag: string, step = 1) {
+  const colors = flagColors(flag);
+  for (let fy = 0; fy < FLAG_H; fy += step)
+    for (let fx = 0; fx < FLAG_W; fx += step) g.rect(x + fx / step, y + fy / step, 1, 1).fill(colors[fy * FLAG_W + fx]);
+}
+
+/** Mastro com bandeira pequena ao lado da construção. */
+function houseFlag(iso: Iso, flag: string, top: number) {
+  const [x, y] = iso.pt([0.1, 0.94, 0]);
+  iso.g.rect(x, y - top, 1, top).fill(0x55555a);
+  paintFlag(iso.g, x - FLAG_W / 2, y - top, flag, 2);
+}
+
 export function drawBuilding(type: BuildingType, variant: number, style?: Style | null): Drawing {
+  const d = drawBuildingBody(type, variant, style);
+  if (style?.flag) {
+    const iso = d.iso;
+    houseFlag(iso, style.flag, Math.min(iso.head - 2, type === "predio" ? 22 : 18));
+  }
+  return finish(d.iso);
+}
+
+function drawBuildingBody(type: BuildingType, variant: number, style?: Style | null): { iso: Iso } {
   const v = Math.abs(variant) % 5;
   const wall = hexToNum(style?.wall, WALLS[type][v]);
   const roof = hexToNum(style?.roof, ROOFS[v]);
@@ -196,7 +219,7 @@ export function drawBuilding(type: BuildingType, variant: number, style?: Style 
       iso.rightRect(b, 0.3, 0.46, 3, 7, WINDOW);
       iso.rightRect(b, 0.56, 0.7, 3, 7, WINDOW);
       iso.gableRoof(a - 0.05, a - 0.05, b + 0.05, b + 0.05, 9, 8, roof);
-      return finish(iso);
+      return { iso };
     }
     case "predio": {
       const iso = new Iso(new Graphics(), 1, 46);
@@ -212,7 +235,7 @@ export function drawBuilding(type: BuildingType, variant: number, style?: Style 
       }
       iso.leftRect(b, 0.42, 0.58, 0, 4, 0x3a3a44);
       iso.box(0.3, 0.45, 0.5, 0.65, h, h + 4, accent(0x8a8f99)); // caixa d'água
-      return finish(iso);
+      return { iso };
     }
     case "oficina": {
       const iso = new Iso(new Graphics(), 1, 20);
@@ -223,7 +246,7 @@ export function drawBuilding(type: BuildingType, variant: number, style?: Style 
       iso.rightRect(b, 0.3, 0.7, 4, 8, WINDOW);
       iso.box(0.15, 0.62, 0.32, 0.8, 11, 17, 0x6a5b52); // chaminé
       iso.leftRect(b, 0.74, 0.86, 2, 6, accent(0xf0a020)); // placa
-      return finish(iso);
+      return { iso };
     }
     case "padaria": {
       const iso = new Iso(new Graphics(), 1, 22);
@@ -241,7 +264,7 @@ export function drawBuilding(type: BuildingType, variant: number, style?: Style 
       }
       iso.gableRoof(a - 0.03, a - 0.03, b + 0.03, b + 0.03, 11, 6, style?.roof ? roof : 0x8a4b32);
       iso.box(0.25, 0.25, 0.38, 0.38, 14, 20, 0xb0a090); // chaminé do forno
-      return finish(iso);
+      return { iso };
     }
     case "cabare": {
       const iso = new Iso(new Graphics(), 1, 28);
@@ -260,7 +283,7 @@ export function drawBuilding(type: BuildingType, variant: number, style?: Style 
       iso.px([0.43, 0.5, 25], 0xffe14f, 3, 3);
       // luzinhas no chão
       for (const u of [0.2, 0.32, 0.68, 0.8]) iso.px([b + 0.05, u, 1], 0xffe14f);
-      return finish(iso);
+      return { iso };
     }
   }
 }
@@ -286,8 +309,13 @@ export function drawCityHall(style?: Style | null): Drawing {
   iso.box(0.86, 0.86, 1.14, 1.14, 34, 37, gold, shade(gold, 1.15));
   // mastro e bandeira
   iso.poly([[1, 1, 37], [1, 1.04, 37], [1, 1.04, 52], [1, 1, 52]], 0x55555a);
-  iso.poly([[1, 1.04, 52], [1, 1.34, 52], [1, 1.34, 46], [1, 1.04, 46]], flag);
-  iso.px([1, 1.19, 50], 0xf5d02a, 2, 2);
+  if (style?.flag) {
+    const [fx, fy] = iso.pt([1, 1.04, 52]);
+    paintFlag(iso.g, fx, fy, style.flag);
+  } else {
+    iso.poly([[1, 1.04, 52], [1, 1.34, 52], [1, 1.34, 46], [1, 1.04, 46]], flag);
+    iso.px([1, 1.19, 50], 0xf5d02a, 2, 2);
+  }
   return finish(iso);
 }
 

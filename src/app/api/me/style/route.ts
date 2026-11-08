@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { proposeHall } from "@/lib/civic";
 import { getStore } from "@/lib/db";
 import { currentResident } from "@/lib/resident";
 import { sanitizeStyle } from "@/lib/styles";
 
-/** Personalizar a casa ou a prefeitura (recurso pago). */
+/**
+ * Personalizar a casa (recurso pago) ou propor a pintura da prefeitura
+ * (o prefeito propõe, os moradores votam).
+ */
 export async function POST(req: Request) {
   const r = await currentResident();
   if (!r?.house) return NextResponse.json({ ok: false, message: "Entre na sua conta primeiro." }, { status: 401 });
@@ -17,7 +21,14 @@ export async function POST(req: Request) {
     const city = await store.getCity(r.house.citySlug);
     if (!city || city.mayorHandle !== r.handle)
       return NextResponse.json({ ok: false, message: "Só o prefeito pode pintar a prefeitura." }, { status: 403 });
-    await store.setHallStyle(city.id, style);
+    if (!style) return NextResponse.json({ ok: false, message: "Escolha alguma mudança." }, { status: 400 });
+    const { approvedNow } = await proposeHall(city, r.handle, style);
+    return NextResponse.json({
+      ok: true,
+      message: approvedNow
+        ? "Aprovado! Como a maioria já concordou, a prefeitura foi pintada."
+        : "Proposta enviada! Os moradores têm 24h para votar.",
+    });
   } else {
     await store.setHouseStyle(r.handle, style);
   }

@@ -1,6 +1,6 @@
-# Cidadezinha 🏘
+# NDCity 🏘
 
-Uma cidadezinha em pixel art (visão isométrica, estilo SimCity clássico, sem
+O Brasil em pixel art (visão isométrica, estilo SimCity clássico, sem
 mecânica de jogo) onde cada seguidor de um perfil do Instagram resgata uma
 casinha com o seu @.
 
@@ -21,8 +21,17 @@ casinha com o seu @.
   - 💬 Chat da cidade, só entre moradores, com filtro de palavrões (mensal)
   - 🎨 Personalização das cores da casa (e da prefeitura, para o prefeito)
   - 🚚 Caminhão de mudança para trocar de cidade (R$ 5)
-- **Admin** (`/admin`): gerar códigos, liberar recursos pagos, remover casinha
-  (remove também os códigos e o login da pessoa).
+- **Bandeiras**: com a personalização, a casa ganha um mastro com bandeira: a
+  do estado (27 bandeiras em pixel art) ou uma desenhada pintando quadradinhos.
+- **Prefeitura votada**: o prefeito propõe cores e bandeira; os moradores votam
+  sim/não por 24h. Mais da metade decide.
+- **Eleições** para governador e presidente: o admin cria o evento, moradores se
+  candidatam e votam. O cargo aparece no mapa só enquanto a pessoa tem casa.
+- **Mudança** deixa escolher de novo o tipo de construção.
+- **Admin** (`/admin`), em abas:
+  - Casas: lista com filtro por estado/cidade/@ e botão ✕ para remover
+  - Ocupação: quanto cada estado e cidade está ocupado, prefeitos e governadores
+  - Códigos, Eleições e Recursos pagos
 
 Sem o Supabase configurado, o site roda em **modo teste** (nada fica salvo).
 
@@ -36,12 +45,12 @@ São 3 contas gratuitas: **GitHub** (já tem), **Supabase** (banco de dados) e
 ### 1. Supabase (banco de dados)
 
 1. Entre em **supabase.com** → *Start your project* → entre com o GitHub.
-2. Toque em **New project**. Dê um nome (ex.: `cidadezinha`), crie uma senha
+2. Toque em **New project**. Dê um nome (ex.: `ndcity`), crie uma senha
    para o banco (guarde, mas não vamos precisar dela agora) e escolha a região
    **South America (São Paulo)**. Toque em **Create new project** e espere ~2 min.
 3. No menu (☰), abra **SQL Editor** → **New query**.
 4. Rode, em ordem, os arquivos da pasta [`supabase/migrations`](supabase/migrations)
-   (`0001_init.sql`, depois `0002_brasil_chat_pagos.sql`): abra cada um aqui no
+   (`0001_init.sql`, `0002_brasil_chat_pagos.sql`, `0003_eleicoes_prefeitura_votada.sql`): abra cada um aqui no
    GitHub, toque em **copiar**, cole no SQL Editor e toque em **Run**.
 5. No menu, vá em **Project Settings** → **API** (ou **Data API** / **API Keys**). Anote:
    - **Project URL** (algo como `https://abcd.supabase.co`)

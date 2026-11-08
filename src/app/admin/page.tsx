@@ -4,7 +4,7 @@ import { adminConfigured, isAdmin } from "@/lib/admin-auth";
 import { getStore } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Admin · Cidadezinha", robots: { index: false } };
+export const metadata = { title: "Admin · NDCity", robots: { index: false } };
 
 export default async function AdminPage() {
   if (!adminConfigured()) {

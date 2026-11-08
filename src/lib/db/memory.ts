@@ -6,9 +6,13 @@ import type {
   ClaimInput,
   ClaimResult,
   Code,
+  Election,
   Entitlement,
+  HallProposal,
+  HouseRow,
   Message,
   MoveResult,
+  OfficeHolder,
   Store,
 } from "./types";
 
@@ -25,6 +29,12 @@ type Data = {
   entitlements: Entitlement[];
   messages: (Message & { cityId: string })[];
   nextMsg: number;
+  elections: Election[];
+  candidates: { electionId: string; handle: string; createdAt: string }[];
+  votes: { electionId: string; voter: string; candidate: string }[];
+  offices: OfficeHolder[];
+  proposals: HallProposal[];
+  hallVotes: { proposalId: string; handle: string; approve: boolean }[];
 };
 
 const g = globalThis as unknown as { __cidadezinhaMem?: Data };
@@ -38,6 +48,12 @@ function data(): Data {
     entitlements: [],
     messages: [],
     nextMsg: 1,
+    elections: [],
+    candidates: [],
+    votes: [],
+    offices: [],
+    proposals: [],
+    hallVotes: [],
   };
   return g.__cidadezinhaMem;
 }
@@ -50,6 +66,7 @@ function refreshMayor(city: City) {
   const residents = d.claims.filter((c) => c.cityId === city.id);
   if (city.mayorHandle && residents.some((c) => c.instagramHandle === city.mayorHandle)) return;
   const next = residents.sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  for (const p of d.proposals) if (p.cityId === city.id && p.status === "open") p.status = "canceled";
   city.mayorHandle = next?.instagramHandle ?? null;
   city.unlockedAt = next ? (city.unlockedAt ?? now()) : null;
   city.hallStyle = null;
@@ -135,7 +152,7 @@ export const memoryStore: Store = {
     }
     return { ok: true, claim, isMayor };
   },
-  async moveHouse({ handle, citySlug, lotIndex, lotCount }): Promise<MoveResult> {
+  async moveHouse({ handle, citySlug, lotIndex, lotCount, buildingType }): Promise<MoveResult> {
     const d = data();
     const claim = d.claims.find((c) => c.instagramHandle === handle);
     if (!claim) return { ok: false, error: "no_house" };
@@ -149,6 +166,7 @@ export const memoryStore: Store = {
     const oldCity = d.cities.find((c) => c.id === claim.cityId);
     claim.cityId = city.id;
     claim.lotIndex = lotIndex;
+    if (buildingType) claim.buildingType = buildingType;
     claim.createdAt = now();
     ent.credits -= 1;
     if (oldCity) refreshMayor(oldCity);
@@ -160,6 +178,24 @@ export const memoryStore: Store = {
     }
     return { ok: true, claim, isMayor };
   },
+  async listAllHouses() {
+    const d = data();
+    return d.claims.map<HouseRow>((c) => {
+      const city = d.cities.find((x) => x.id === c.cityId)!;
+      return {
+        handle: c.instagramHandle,
+        type: c.buildingType,
+        createdAt: c.createdAt,
+        citySlug: city.slug,
+        cityName: city.name,
+        uf: city.uf,
+        isMayor: city.mayorHandle === c.instagramHandle,
+      };
+    });
+  },
+  async countResidents(cityId) {
+    return data().claims.filter((c) => c.cityId === cityId).length;
+  },
   async setHouseStyle(handle, style) {
     const claim = data().claims.find((c) => c.instagramHandle === handle);
     if (claim) claim.style = style;
@@ -170,6 +206,11 @@ export const memoryStore: Store = {
     d.claims = d.claims.filter((c) => c.instagramHandle !== handle);
     d.codes = d.codes.filter((c) => c.instagramHandle !== handle);
     for (const [k, v] of d.sessions) if (v === handle) d.sessions.delete(k);
+    const openE = new Set(d.elections.filter((e) => e.status === "open").map((e) => e.id));
+    d.candidates = d.candidates.filter((c) => !(openE.has(c.electionId) && c.handle === handle));
+    d.votes = d.votes.filter((v) => !(openE.has(v.electionId) && (v.voter === handle || v.candidate === handle)));
+    const openP = new Set(d.proposals.filter((p) => p.status === "open").map((p) => p.id));
+    d.hallVotes = d.hallVotes.filter((v) => !(openP.has(v.proposalId) && v.handle === handle));
     for (const city of d.cities) refreshMayor(city);
     return { hadHouse: !!claim };
   },
@@ -229,5 +270,90 @@ export const memoryStore: Store = {
     d.messages.push(m);
     if (d.messages.length > 5000) d.messages.shift();
     return { id: m.id, handle, body, createdAt: m.createdAt };
+  },
+
+  async createElection(office, uf, endsAt) {
+    const e: Election = { id: randomUUID(), office, uf, status: "open", endsAt, winnerHandle: null, createdAt: now() };
+    data().elections.unshift(e);
+    return e;
+  },
+  async listElections(status) {
+    return data().elections.filter((e) => !status || e.status === status);
+  },
+  async getElection(id) {
+    return data().elections.find((e) => e.id === id) ?? null;
+  },
+  async updateElection(id, patch) {
+    const e = data().elections.find((x) => x.id === id);
+    if (!e) return;
+    e.status = patch.status;
+    if (patch.winnerHandle !== undefined) e.winnerHandle = patch.winnerHandle;
+  },
+  async addCandidate(electionId, handle) {
+    const d = data();
+    if (!d.candidates.some((c) => c.electionId === electionId && c.handle === handle))
+      d.candidates.push({ electionId, handle, createdAt: now() });
+  },
+  async removeCandidate(electionId, handle) {
+    const d = data();
+    d.candidates = d.candidates.filter((c) => !(c.electionId === electionId && c.handle === handle));
+    d.votes = d.votes.filter((v) => !(v.electionId === electionId && v.candidate === handle));
+  },
+  async listCandidates(electionId) {
+    return data()
+      .candidates.filter((c) => c.electionId === electionId)
+      .map(({ handle, createdAt }) => ({ handle, createdAt }));
+  },
+  async castVote(electionId, voter, candidate) {
+    const d = data();
+    d.votes = d.votes.filter((v) => !(v.electionId === electionId && v.voter === voter));
+    d.votes.push({ electionId, voter, candidate });
+  },
+  async getVote(electionId, voter) {
+    return data().votes.find((v) => v.electionId === electionId && v.voter === voter)?.candidate ?? null;
+  },
+  async countVotes(electionId) {
+    const out: Record<string, number> = {};
+    for (const v of data().votes) if (v.electionId === electionId) out[v.candidate] = (out[v.candidate] ?? 0) + 1;
+    return out;
+  },
+  async listOffices() {
+    return data().offices;
+  },
+  async setOffice(office, uf, handle) {
+    const d = data();
+    d.offices = d.offices.filter((o) => !(o.office === office && o.uf === uf));
+    d.offices.push({ office, uf, handle, since: now() });
+  },
+  async clearOffice(office, uf) {
+    const d = data();
+    d.offices = d.offices.filter((o) => !(o.office === office && o.uf === uf));
+  },
+
+  async getOpenProposal(cityId) {
+    return data().proposals.find((p) => p.cityId === cityId && p.status === "open") ?? null;
+  },
+  async createProposal(cityId, proposer, style, endsAt) {
+    const p: HallProposal = { id: randomUUID(), cityId, proposer, style, status: "open", endsAt, createdAt: now() };
+    data().proposals.push(p);
+    return p;
+  },
+  async updateProposal(id, status) {
+    const p = data().proposals.find((x) => x.id === id);
+    if (p) p.status = status;
+  },
+  async castHallVote(proposalId, handle, approve) {
+    const d = data();
+    d.hallVotes = d.hallVotes.filter((v) => !(v.proposalId === proposalId && v.handle === handle));
+    d.hallVotes.push({ proposalId, handle, approve });
+  },
+  async getHallVote(proposalId, handle) {
+    return data().hallVotes.find((v) => v.proposalId === proposalId && v.handle === handle)?.approve ?? null;
+  },
+  async countHallVotes(proposalId) {
+    let yes = 0;
+    let no = 0;
+    for (const v of data().hallVotes) if (v.proposalId === proposalId) v.approve ? yes++ : no++;
+    return { yes, no };
   },
 };

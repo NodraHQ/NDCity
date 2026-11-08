@@ -57,6 +57,41 @@ export type Entitlement = {
 
 export type Message = { id: number; handle: string; body: string; createdAt: string };
 
+/** Casa ativa com dados da cidade (painel do admin). */
+export type HouseRow = {
+  handle: string;
+  type: BuildingType;
+  createdAt: string;
+  citySlug: string;
+  cityName: string;
+  uf: string | null;
+  isMayor: boolean;
+};
+
+export type Office = "governor" | "president";
+
+export type Election = {
+  id: string;
+  office: Office;
+  uf: string | null;
+  status: "open" | "closed" | "canceled";
+  endsAt: string;
+  winnerHandle: string | null;
+  createdAt: string;
+};
+
+export type OfficeHolder = { office: Office; uf: string; handle: string; since: string };
+
+export type HallProposal = {
+  id: string;
+  cityId: string;
+  proposer: string;
+  style: Style;
+  status: "open" | "approved" | "rejected" | "canceled";
+  endsAt: string;
+  createdAt: string;
+};
+
 export type ClaimInput = {
   code: string;
   citySlug: string;
@@ -89,7 +124,15 @@ export interface Store {
   listClaims(cityId: string): Promise<Claim[]>;
   findClaimByHandle(handle: string): Promise<(Claim & { citySlug: string }) | null>;
   claim(input: ClaimInput): Promise<ClaimResult>;
-  moveHouse(input: { handle: string; citySlug: string; lotIndex: number; lotCount: number }): Promise<MoveResult>;
+  moveHouse(input: {
+    handle: string;
+    citySlug: string;
+    lotIndex: number;
+    lotCount: number;
+    buildingType: BuildingType | null;
+  }): Promise<MoveResult>;
+  listAllHouses(): Promise<HouseRow[]>;
+  countResidents(cityId: string): Promise<number>;
   setHouseStyle(handle: string, style: Style | null): Promise<void>;
   /** Remove a casa e TODO o acesso do @ (códigos, logins) e passa a prefeitura adiante. */
   removeHouse(handle: string): Promise<{ hadHouse: boolean }>;
@@ -108,4 +151,25 @@ export interface Store {
   // chat
   listMessages(cityId: string, afterId: number, limit: number): Promise<Message[]>;
   addMessage(cityId: string, handle: string, body: string): Promise<Message>;
+  // eleições
+  createElection(office: Office, uf: string | null, endsAt: string): Promise<Election>;
+  listElections(status?: Election["status"]): Promise<Election[]>;
+  getElection(id: string): Promise<Election | null>;
+  updateElection(id: string, patch: { status: Election["status"]; winnerHandle?: string | null }): Promise<void>;
+  addCandidate(electionId: string, handle: string): Promise<void>;
+  removeCandidate(electionId: string, handle: string): Promise<void>;
+  listCandidates(electionId: string): Promise<{ handle: string; createdAt: string }[]>;
+  castVote(electionId: string, voter: string, candidate: string): Promise<void>;
+  getVote(electionId: string, voter: string): Promise<string | null>;
+  countVotes(electionId: string): Promise<Record<string, number>>;
+  listOffices(): Promise<OfficeHolder[]>;
+  setOffice(office: Office, uf: string, handle: string, electionId: string | null): Promise<void>;
+  clearOffice(office: Office, uf: string): Promise<void>;
+  // prefeitura votada
+  getOpenProposal(cityId: string): Promise<HallProposal | null>;
+  createProposal(cityId: string, proposer: string, style: Style, endsAt: string): Promise<HallProposal>;
+  updateProposal(id: string, status: HallProposal["status"]): Promise<void>;
+  castHallVote(proposalId: string, handle: string, approve: boolean): Promise<void>;
+  getHallVote(proposalId: string, handle: string): Promise<boolean | null>;
+  countHallVotes(proposalId: string): Promise<{ yes: number; no: number }>;
 }
