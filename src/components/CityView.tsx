@@ -16,6 +16,9 @@ import LoginDialog, { type LoginResult } from "./LoginDialog";
 import SignupDialog from "./SignupDialog";
 import Tracker from "./Tracker";
 import { PRESETS } from "@/lib/presets";
+import { hashString } from "@/lib/city/rng";
+
+const HousePreview = dynamic(() => import("./city/HousePreview"), { ssr: false });
 
 const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
   ssr: false,
@@ -643,6 +646,15 @@ export default function CityView({ initial }: { initial: CityData }) {
         <div className="sheet tall">
           <h3>{step.target === "hall" ? "🏛 Proposta para a prefeitura" : "🎨 Pintar minha casa"}</h3>
           {step.target === "hall" && <p className="muted">Você escolhe; os moradores votam sim ou não (24h). Mais da metade decide.</p>}
+          <div className="preview-box">
+            <HousePreview
+              hall={step.target === "hall"}
+              type={myHouse?.type ?? "casa"}
+              variant={me ? hashString(me.handle) % 5 : 0}
+              style={step.style}
+            />
+            <span className="muted">Prévia: muda na hora conforme você escolhe</span>
+          </div>
           <div className="palette-row">
             <span>Modelos prontos</span>
             <div className="presets">

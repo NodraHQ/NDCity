@@ -36,6 +36,8 @@ async function api(url: string, method = "GET", body?: unknown) {
 export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "memory" }) {
   const [tab, setTab] = useState<Tab>("acessos");
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadOverview = useCallback(async () => {
     const j = await api("/api/admin/overview");
@@ -44,6 +46,14 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
   useEffect(() => {
     loadOverview();
   }, [loadOverview]);
+
+  /** Recarrega tudo: os números do topo e a aba aberta. */
+  async function refresh() {
+    setRefreshing(true);
+    await loadOverview();
+    setRefreshKey((k) => k + 1);
+    setTimeout(() => setRefreshing(false), 400);
+  }
 
   async function logout() {
     await api("/api/admin/logout", "POST");
@@ -66,6 +76,7 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
       <div className="admin-head">
         <h1>🏗 NDCity · Admin</h1>
         <div className="row">
+          <button className="btn" onClick={refresh} disabled={refreshing}>{refreshing ? "Atualizando…" : "🔄 Atualizar"}</button>
           <a className="btn" href="/">Ver mapa</a>
           <button className="btn" onClick={logout}>Sair</button>
         </div>
@@ -86,14 +97,16 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
           <button key={id} className={`btn ${tab === id ? "primary" : ""}`} onClick={() => setTab(id)}>{label}</button>
         ))}
       </nav>
-      {tab === "acessos" && <StatsTab />}
-      {tab === "historico" && <LogsTab />}
-      {tab === "casas" && <HousesTab overview={overview} reload={loadOverview} />}
-      {tab === "ocupacao" && <OccupancyTab overview={overview} />}
-      {tab === "codigos" && <CodesTab />}
-      {tab === "eleicoes" && <ElectionsTab />}
-      {tab === "recursos" && <PerksTab />}
-      {tab === "integracao" && <IntegrationTab />}
+      <div key={refreshKey} className="tab-body">
+        {tab === "acessos" && <StatsTab />}
+        {tab === "historico" && <LogsTab />}
+        {tab === "casas" && <HousesTab overview={overview} reload={loadOverview} />}
+        {tab === "ocupacao" && <OccupancyTab overview={overview} />}
+        {tab === "codigos" && <CodesTab />}
+        {tab === "eleicoes" && <ElectionsTab />}
+        {tab === "recursos" && <PerksTab />}
+        {tab === "integracao" && <IntegrationTab />}
+      </div>
     </main>
   );
 }
