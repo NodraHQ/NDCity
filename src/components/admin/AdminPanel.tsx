@@ -433,6 +433,70 @@ function ElectionsTab() {
 
 // --------------------------------------------------------- recursos pagos
 
+function CapCard() {
+  const [info, setInfo] = useState<{
+    paidCents: number;
+    reservedCents: number;
+    capCents: number;
+    mercadoPago: boolean;
+    testMode: boolean;
+    webhookSecret: boolean;
+  } | null>(null);
+  const [cap, setCap] = useState("");
+  const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
+  const load = useCallback(async () => {
+    const j = await api("/api/admin/settings");
+    if (j.ok) {
+      setInfo(j);
+      setCap(String(j.capCents / 100));
+    }
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  if (!info) return <div className="card">Carregando…</div>;
+  const pct = info.capCents ? Math.round((info.paidCents / info.capCents) * 1000) / 10 : 100;
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    const j = await api("/api/admin/settings", "POST", { capReais: Number(cap.replace(",", ".")) });
+    setMsg(j.ok ? { text: "Limite salvo." } : { text: j.message, error: true });
+    load();
+  }
+
+  return (
+    <form className="card" onSubmit={save}>
+      <h2>🛑 Limite mensal de vendas</h2>
+      <p>
+        Quando o total vendido no mês chegar no limite, o botão de comprar para sozinho e volta no dia 1º. Conta tudo que entrou como
+        pagamento (Mercado Pago e Pix manual); cortesias não contam.
+      </p>
+      <p>
+        Pagamento online:{" "}
+        {info.mercadoPago ? (info.testMode ? "🧪 Mercado Pago em modo TESTE (dinheiro de mentira)" : "✅ Mercado Pago ligado") : "⏸ desligado (só liberação manual)"}
+        {info.mercadoPago && !info.webhookSecret && " · ⚠️ falta a chave secreta do aviso (MP_WEBHOOK_SECRET)"}
+      </p>
+      <div className="stats">
+        <div className="stat"><b>{formatPrice(info.paidCents)}</b><span>vendido este mês</span></div>
+        <div className="stat"><b>{formatPrice(info.capCents)}</b><span>limite</span></div>
+        <div className="stat"><b>{formatPrice(Math.max(0, info.capCents - info.paidCents))}</b><span>falta</span></div>
+      </div>
+      <span className="bar big"><span style={{ width: `${Math.min(100, pct)}%` }} /><em>{pct.toLocaleString("pt-BR")}%</em></span>
+      {pct >= 100 ? (
+        <p className="error">🛑 Limite atingido: as vendas estão pausadas até o mês que vem.</p>
+      ) : pct >= 80 ? (
+        <p className="error">⚠️ Já passou de 80% do limite deste mês.</p>
+      ) : null}
+      <div className="row left">
+        <span>R$</span>
+        <input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="decimal" style={{ maxWidth: 160 }} />
+        <button className="btn primary">Salvar limite</button>
+      </div>
+      {msg && <p className={msg.error ? "error" : "ok"}>{msg.text}</p>}
+    </form>
+  );
+}
+
 function PerksTab() {
   const [handle, setHandle] = useState("");
   const [product, setProduct] = useState<ProductId>("chat_mensal");
@@ -453,9 +517,11 @@ function PerksTab() {
   }
 
   return (
+    <>
+    <CapCard />
     <form className="card" onSubmit={grant}>
       <h2>Liberar recurso pago</h2>
-      <p>Enquanto o pagamento online não está pronto: a pessoa paga por Pix direto pra você e você libera aqui.</p>
+      <p>Para Pix que chegou direto pra você (fora do Mercado Pago) ou para dar de presente (cortesia). Pagamentos pelo site são liberados sozinhos.</p>
       <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@fulano" autoCapitalize="none" autoComplete="off" />
       <select value={product} onChange={(e) => setProduct(e.target.value as ProductId)}>
         {(Object.keys(PRODUCTS) as ProductId[]).map((id) => (
@@ -468,6 +534,7 @@ function PerksTab() {
       <button className="btn primary" disabled={!handle.trim()}>Liberar</button>
       {msg && <p className={msg.error ? "error" : "ok"}>{msg.text}</p>}
     </form>
+    </>
   );
 }
 
@@ -573,7 +640,7 @@ function StatsTab() {
           <table>
             <tbody>
               {st.revenue.recent.map((p, i) => (
-                <tr key={i}><td>{fmtDate(p.at)}</td><td>@{p.handle}</td><td>{p.label}</td><td>{money(p.cents)}</td><td>{p.provider === "manual" ? "Pix manual" : p.provider}</td></tr>
+                <tr key={i}><td>{fmtDate(p.at)}</td><td>@{p.handle}</td><td>{p.label}</td><td>{money(p.cents)}</td><td>{p.provider === "manual" ? "Pix manual" : p.provider === "mercadopago" ? "Mercado Pago" : p.provider}</td></tr>
               ))}
               {!st.revenue.recent.length && <tr><td>Nenhum pagamento ainda.</td></tr>}
             </tbody>
@@ -609,6 +676,10 @@ const LOG_LABELS: Record<string, string> = {
   votou: "🗳 votou",
   admin_entrou: "🔐 admin entrou",
   codigo_acesso: "🔑 código de acesso gerado",
+  compra_iniciada: "🛒 abriu um pagamento",
+  pagamento_suspeito: "⚠️ pagamento com valor diferente",
+  estorno: "↩ estorno",
+  limite_alterado: "🛑 limite mensal alterado",
   conta_criada: "🆕 criou conta",
   senha_criada: "🔒 criou senha",
   senha_trocada: "🔒 trocou a senha",
@@ -622,7 +693,11 @@ function describe(l: LogEntry): string {
       return `${buildingLabel(String(d.tipo ?? ""))}${d.prefeito ? " · virou prefeito(a) 🏛" : ""}${city}`;
     case "mudou":
       return `${d.de} → ${d.para} (${buildingLabel(String(d.tipo ?? ""))})${d.prefeito ? " · virou prefeito(a) 🏛" : ""}`;
+    case "limite_alterado":
+      return formatPrice(Math.round(Number(d.valor) * 100));
     case "pagamento":
+    case "estorno":
+    case "compra_iniciada":
     case "cortesia":
       return `${d.produto}${d.valor ? ` · ${formatPrice(Math.round(Number(d.valor) * 100))}` : ""}`;
     case "codigo_gerado":

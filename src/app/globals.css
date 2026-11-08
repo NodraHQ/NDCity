@@ -258,3 +258,4 @@ table.logs td:first-child { white-space: nowrap; }
 
 .home-actions { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
 button.banner.vote { width: auto; left: 16px; right: 76px; margin: 0; max-width: 560px; }
+.bar.big { width: 100%; height: 22px; margin: 6px 0; }

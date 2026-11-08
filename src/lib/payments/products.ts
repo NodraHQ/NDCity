@@ -2,7 +2,8 @@ import type { Feature } from "@/lib/db/types";
 
 /**
  * Produtos pagos e preços (definidos pelo dono): chat R$ 5/mês,
- * personalização R$ 1, mudança R$ 5. Para mudar, ajuste aqui. Quando o gateway for escolhido, ele cobra o valor daqui e,
+ * personalização R$ 1, mudança R$ 5. Para mudar, ajuste aqui. O valor
+ * cobrado no Mercado Pago sai daqui. Quando o gateway for escolhido, ele cobra o valor daqui e,
  * ao confirmar o pagamento, chama grantEntitlement com estes dados.
  */
 export const PRODUCTS = {
@@ -41,5 +42,6 @@ export function isProductId(v: unknown): v is ProductId {
 export const formatPrice = (cents: number) =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-/** Enquanto não há gateway, a compra é liberada manualmente pelo admin. */
-export const PAYMENTS_ENABLED = false;
+// O pagamento online liga sozinho quando MP_ACCESS_TOKEN está configurado
+// na Vercel (ver src/lib/payments/mercadopago.ts). Sem ele, o botão de
+// comprar pede para falar com a equipe e o admin libera manualmente.

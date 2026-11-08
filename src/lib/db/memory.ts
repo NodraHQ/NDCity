@@ -43,6 +43,7 @@ type Data = {
   loginCodes: { code: string; handle: string; expiresAt: string; usedAt: string | null }[];
   visits: VisitRow[];
   purchases: Purchase[];
+  settings: Map<string, unknown>;
 };
 
 const g = globalThis as unknown as { __cidadezinhaMem?: Data };
@@ -67,6 +68,7 @@ function data(): Data {
     loginCodes: [],
     visits: [],
     purchases: [],
+    settings: new Map(),
   };
   return g.__cidadezinhaMem;
 }
@@ -458,5 +460,30 @@ export const memoryStore: Store = {
   },
   async listPurchases() {
     return data().purchases;
+  },
+  async createPendingPurchase(p) {
+    const purchase: Purchase = { ...p, id: randomUUID(), status: "pending", createdAt: now() };
+    data().purchases.unshift(purchase);
+    return purchase;
+  },
+  async setPurchaseCheckout() {},
+  async getPurchase(id) {
+    return data().purchases.find((p) => p.id === id) ?? null;
+  },
+  async markPurchasePaid(id) {
+    const p = data().purchases.find((x) => x.id === id && x.status === "pending");
+    if (!p) return false;
+    p.status = "paid";
+    return true;
+  },
+  async setPurchaseStatus(id, status) {
+    const p = data().purchases.find((x) => x.id === id);
+    if (p) p.status = status;
+  },
+  async getSetting<T>(key: string) {
+    return (data().settings.get(key) as T) ?? null;
+  },
+  async setSetting(key, value) {
+    data().settings.set(key, value);
   },
 };

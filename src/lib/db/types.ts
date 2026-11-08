@@ -229,4 +229,13 @@ export interface Store {
   // pagamentos
   addPurchase(p: Omit<Purchase, "id" | "createdAt">): Promise<void>;
   listPurchases(): Promise<Purchase[]>;
+  createPendingPurchase(p: { handle: string; product: string; amountCents: number; provider: string }): Promise<Purchase>;
+  setPurchaseCheckout(id: string, checkoutId: string): Promise<void>;
+  getPurchase(id: string): Promise<Purchase | null>;
+  /** Marca como paga só se ainda estava pendente. Devolve true se mudou (evita liberar duas vezes). */
+  markPurchasePaid(id: string, providerRef: string): Promise<boolean>;
+  setPurchaseStatus(id: string, status: Purchase["status"]): Promise<void>;
+  // configurações
+  getSetting<T>(key: string): Promise<T | null>;
+  setSetting(key: string, value: unknown): Promise<void>;
 }

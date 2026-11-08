@@ -471,6 +471,45 @@ export const supabaseStore: Store = {
       }),
     );
   },
+  async createPendingPurchase(p) {
+    const r = check(
+      await db()
+        .from("purchases")
+        .insert({ handle: p.handle, product: p.product, amount_cents: p.amountCents, provider: p.provider, status: "pending" })
+        .select("*")
+        .single(),
+    ) as PurchaseRow;
+    return toPurchase(r);
+  },
+  async setPurchaseCheckout(id, checkoutId) {
+    check(await db().from("purchases").update({ checkout_id: checkoutId }).eq("id", id));
+  },
+  async getPurchase(id) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    const r = check(await db().from("purchases").select("*").eq("id", id).maybeSingle()) as PurchaseRow | null;
+    return r ? toPurchase(r) : null;
+  },
+  async markPurchasePaid(id, providerRef) {
+    const rows = check(
+      await db()
+        .from("purchases")
+        .update({ status: "paid", provider_ref: providerRef, paid_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("status", "pending")
+        .select("id"),
+    ) as { id: string }[];
+    return rows.length > 0;
+  },
+  async setPurchaseStatus(id, status) {
+    check(await db().from("purchases").update({ status }).eq("id", id));
+  },
+  async getSetting<T>(key: string) {
+    const r = check(await db().from("settings").select("value").eq("key", key).maybeSingle()) as { value: T } | null;
+    return r?.value ?? null;
+  },
+  async setSetting(key, value) {
+    check(await db().from("settings").upsert({ key, value, updated_at: new Date().toISOString() }));
+  },
   async listPurchases() {
     const rows = check(await db().from("purchases").select("*").order("created_at", { ascending: false }).limit(5000)) as {
       id: string;
@@ -492,6 +531,25 @@ export const supabaseStore: Store = {
     }));
   },
 };
+
+type PurchaseRow = {
+  id: string;
+  handle: string;
+  product: string;
+  amount_cents: number;
+  status: Purchase["status"];
+  provider: string | null;
+  created_at: string;
+};
+const toPurchase = (r: PurchaseRow): Purchase => ({
+  id: r.id,
+  handle: r.handle,
+  product: r.product,
+  amountCents: r.amount_cents,
+  status: r.status,
+  provider: r.provider,
+  createdAt: r.created_at,
+});
 
 type ElectionRow = {
   id: string;

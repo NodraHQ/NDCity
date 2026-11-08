@@ -110,6 +110,20 @@ export default function CityView({ initial }: { initial: CityData }) {
   }, [slug]);
 
   useEffect(() => {
+    const pay = new URLSearchParams(window.location.search).get("pagamento");
+    if (pay) {
+      window.history.replaceState(null, "", window.location.pathname);
+      if (pay === "ok") {
+        setStep({ name: "notice", title: "🎉 Pagamento aprovado!", text: "Obrigado! Seu recurso já está sendo liberado (leva alguns segundos)." });
+        // o aviso do Mercado Pago pode chegar uns segundos depois: confere de novo
+        [2000, 5000, 10000, 20000].forEach((ms) => setTimeout(() => refreshMe(), ms));
+      } else if (pay === "pendente") {
+        setStep({ name: "notice", title: "⏳ Pagamento em andamento", text: "Assim que o Pix for confirmado, o recurso é liberado sozinho." });
+        [10000, 30000, 60000].forEach((ms) => setTimeout(() => refreshMe(), ms));
+      } else {
+        setStep({ name: "notice", title: "Pagamento não concluído", text: "Nada foi cobrado. Você pode tentar de novo quando quiser." });
+      }
+    }
     if (new URLSearchParams(window.location.search).get("morar") === "1") {
       window.history.replaceState(null, "", window.location.pathname);
       wantsToMove.current = true;
@@ -274,7 +288,7 @@ export default function CityView({ initial }: { initial: CityData }) {
 
   async function buy(product: ProductId) {
     setStep({ name: "paywall", product, busy: true });
-    const json = await postJSON("/api/purchase", { product });
+    const json = await postJSON("/api/purchase", { product, returnPath: `/c/${slug}` });
     if (json.url) window.location.href = json.url;
     else setStep({ name: "paywall", product, message: json.message });
   }
