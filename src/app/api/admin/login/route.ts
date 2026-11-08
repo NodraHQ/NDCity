@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminConfigured, checkPassword, setAdminCookie } from "@/lib/admin-auth";
+import { audit } from "@/lib/audit";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
@@ -11,5 +12,6 @@ export async function POST(req: Request) {
   if (typeof body?.password !== "string" || !checkPassword(body.password))
     return NextResponse.json({ ok: false, message: "Senha errada." }, { status: 401 });
   await setAdminCookie();
+  await audit({ actor: "admin", action: "admin_entrou" });
   return NextResponse.json({ ok: true });
 }

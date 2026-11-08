@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { proposalView, resolveProposal } from "@/lib/civic";
+import { audit } from "@/lib/audit";
 import { getStore } from "@/lib/db";
 import { currentHandle } from "@/lib/resident";
 
@@ -28,6 +29,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   const body = await req.json().catch(() => null);
   if (typeof body?.approve !== "boolean") return NextResponse.json({ ok: false, message: "Voto inválido." }, { status: 400 });
   await store.castHallVote(p.id, handle, body.approve);
+  await audit({ actor: handle, action: "voto_prefeitura", handle, citySlug: slug, details: { aprovou: body.approve } });
   const view = await proposalView((await store.getCity(slug))!, handle);
   return NextResponse.json({ ok: true, proposal: view, decided: !view });
 }

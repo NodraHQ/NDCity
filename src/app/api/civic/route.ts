@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { activeOffices, electionView, residenceOf, syncElections } from "@/lib/civic";
 import { getStore } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
@@ -45,5 +46,8 @@ export async function POST(req: Request) {
     await store.castVote(e.id, handle, body.candidate);
   } else return NextResponse.json({ ok: false, message: "Ação inválida." }, { status: 400 });
 
+  const cargo = e.office === "president" ? "presidente" : `governador ${e.uf}`;
+  const action = body.action === "candidate" ? "candidatura" : body.action === "withdraw" ? "desistiu" : "votou";
+  await audit({ actor: handle, action, handle, details: { cargo } });
   return NextResponse.json({ ok: true, election: await electionView(e, handle) });
 }

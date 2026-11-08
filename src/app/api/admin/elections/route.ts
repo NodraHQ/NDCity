@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { closeElection, electionView, syncElections } from "@/lib/civic";
+import { audit } from "@/lib/audit";
 import { getStore } from "@/lib/db";
 import { STATE_FLAG_UFS } from "@/lib/flags";
 
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
   if (open.some((e) => e.office === office && (office === "president" || e.uf === uf)))
     return NextResponse.json({ ok: false, message: "Já existe uma eleição aberta para esse cargo." }, { status: 409 });
   const e = await store.createElection(office, office === "governor" ? uf : null, new Date(Date.now() + days * 86400_000).toISOString());
+  await audit({ actor: "admin", action: "eleicao_criada", details: { cargo: office === "president" ? "presidente" : `governador ${uf}`, dias: days } });
   return NextResponse.json({ ok: true, election: e });
 }
 
@@ -41,6 +43,7 @@ export async function PATCH(req: Request) {
   const store = getStore();
   if (body?.action === "clear_office") {
     await store.clearOffice(body.office, body.uf ?? "");
+    await audit({ actor: "admin", action: "cargo_removido", details: { cargo: body.office === "president" ? "presidente" : `governador ${body.uf}` } });
     return NextResponse.json({ ok: true });
   }
   const e = typeof body?.id === "string" ? await store.getElection(body.id) : null;
@@ -51,6 +54,7 @@ export async function PATCH(req: Request) {
   }
   if (body.action === "cancel") {
     await store.updateElection(e.id, { status: "canceled" });
+    await audit({ actor: "admin", action: "eleicao_cancelada", details: { cargo: e.office === "president" ? "presidente" : `governador ${e.uf}` } });
     return NextResponse.json({ ok: true });
   }
   return NextResponse.json({ ok: false, message: "Ação inválida." }, { status: 400 });

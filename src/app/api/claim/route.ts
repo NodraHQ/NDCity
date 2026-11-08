@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { isBuildingType } from "@/lib/buildings";
 import { ensureCityRow, lotCountFor } from "@/lib/city-data";
 import { normalizeCode } from "@/lib/codes";
@@ -30,6 +31,13 @@ export async function POST(req: Request) {
   if (!result.ok) return NextResponse.json({ ok: false, error: result.error, message: CLAIM_ERRORS[result.error] });
 
   await startSession(result.claim.instagramHandle);
+  await audit({
+    actor: result.claim.instagramHandle,
+    action: "chegou",
+    handle: result.claim.instagramHandle,
+    citySlug,
+    details: { tipo: buildingType, prefeito: result.isMayor },
+  });
   return NextResponse.json({
     ok: true,
     handle: result.claim.instagramHandle,

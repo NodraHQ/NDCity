@@ -68,6 +68,33 @@ export type HouseRow = {
   isMayor: boolean;
 };
 
+export type LogEntry = {
+  id: number;
+  createdAt: string;
+  actor: string;
+  action: string;
+  handle: string | null;
+  citySlug: string | null;
+  details: Record<string, unknown> | null;
+};
+export type NewLog = Omit<LogEntry, "id" | "createdAt" | "handle" | "citySlug" | "details"> & {
+  handle?: string | null;
+  citySlug?: string | null;
+  details?: Record<string, unknown> | null;
+};
+
+export type VisitRow = { visitorId: string; day: string; firstAt: string; lastAt: string; views: number; handle: string | null; lastPath: string | null };
+
+export type Purchase = {
+  id: string;
+  handle: string;
+  product: string;
+  amountCents: number;
+  status: "pending" | "paid" | "canceled" | "refunded";
+  provider: string | null;
+  createdAt: string;
+};
+
 export type Office = "governor" | "president";
 
 export type Election = {
@@ -172,4 +199,13 @@ export interface Store {
   castHallVote(proposalId: string, handle: string, approve: boolean): Promise<void>;
   getHallVote(proposalId: string, handle: string): Promise<boolean | null>;
   countHallVotes(proposalId: string): Promise<{ yes: number; no: number }>;
+  // histórico
+  addLog(entry: NewLog): Promise<void>;
+  listLogs(opts: { limit: number; beforeId?: number; action?: string; handle?: string }): Promise<LogEntry[]>;
+  // acessos
+  trackVisit(visitorId: string, handle: string | null, path: string, view: boolean): Promise<void>;
+  listVisits(sinceDay: string): Promise<VisitRow[]>;
+  // pagamentos
+  addPurchase(p: Omit<Purchase, "id" | "createdAt">): Promise<void>;
+  listPurchases(): Promise<Purchase[]>;
 }

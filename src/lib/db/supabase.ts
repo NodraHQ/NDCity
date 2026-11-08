@@ -11,10 +11,13 @@ import type {
   Feature,
   HallProposal,
   HouseRow,
+  LogEntry,
   Message,
   MoveResult,
   Office,
+  Purchase,
   Store,
+  VisitRow,
 } from "./types";
 
 /**
@@ -352,6 +355,97 @@ export const supabaseStore: Store = {
   async countHallVotes(proposalId) {
     const rows = check(await db().from("hall_votes").select("approve").eq("proposal_id", proposalId)) as { approve: boolean }[];
     return { yes: rows.filter((r) => r.approve).length, no: rows.filter((r) => !r.approve).length };
+  },
+
+  async addLog(entry) {
+    check(
+      await db().from("audit_log").insert({
+        actor: entry.actor,
+        action: entry.action,
+        handle: entry.handle ?? null,
+        city_slug: entry.citySlug ?? null,
+        details: entry.details ?? null,
+      }),
+    );
+  },
+  async listLogs({ limit, beforeId, action, handle }) {
+    let q = db().from("audit_log").select("*").order("id", { ascending: false }).limit(limit);
+    if (beforeId) q = q.lt("id", beforeId);
+    if (action) q = q.eq("action", action);
+    if (handle) q = q.or(`handle.eq.${handle},actor.eq.${handle}`);
+    const rows = check(await q) as {
+      id: number;
+      created_at: string;
+      actor: string;
+      action: string;
+      handle: string | null;
+      city_slug: string | null;
+      details: Record<string, unknown> | null;
+    }[];
+    return rows.map<LogEntry>((r) => ({
+      id: r.id,
+      createdAt: r.created_at,
+      actor: r.actor,
+      action: r.action,
+      handle: r.handle,
+      citySlug: r.city_slug,
+      details: r.details,
+    }));
+  },
+  async trackVisit(visitorId, handle, path, view) {
+    check(await db().rpc("track_visit", { p_vid: visitorId, p_handle: handle, p_path: path, p_view: view }));
+  },
+  async listVisits(sinceDay) {
+    const rows = check(await db().from("visits").select("*").gte("day", sinceDay).limit(50000)) as {
+      visitor_id: string;
+      day: string;
+      first_at: string;
+      last_at: string;
+      views: number;
+      handle: string | null;
+      last_path: string | null;
+    }[];
+    return rows.map<VisitRow>((r) => ({
+      visitorId: r.visitor_id,
+      day: r.day,
+      firstAt: r.first_at,
+      lastAt: r.last_at,
+      views: r.views,
+      handle: r.handle,
+      lastPath: r.last_path,
+    }));
+  },
+  async addPurchase(p) {
+    check(
+      await db().from("purchases").insert({
+        handle: p.handle,
+        product: p.product,
+        amount_cents: p.amountCents,
+        status: p.status,
+        provider: p.provider,
+        paid_at: p.status === "paid" ? new Date().toISOString() : null,
+      }),
+    );
+  },
+  async listPurchases() {
+    const rows = check(await db().from("purchases").select("*").order("created_at", { ascending: false }).limit(5000)) as {
+      id: string;
+      handle: string;
+      product: string;
+      amount_cents: number;
+      status: Purchase["status"];
+      provider: string | null;
+      created_at: string;
+    }[];
+    return rows.map<Purchase>((r) => ({
+      id: r.id,
+      handle: r.handle,
+      product: r.product,
+      amountCents: r.amount_cents,
+      status: r.status,
+      provider: r.provider,
+      createdAt: r.created_at,
+    }));
   },
 };
 

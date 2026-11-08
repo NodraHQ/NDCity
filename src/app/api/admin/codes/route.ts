@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { generateCode } from "@/lib/codes";
+import { audit } from "@/lib/audit";
 import { getStore } from "@/lib/db";
 import { isValidHandle, normalizeHandle } from "@/lib/handle";
 
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
   for (let i = 0; i < 5; i++) {
     try {
       const code = await store.createCode(generateCode(), handle);
+      await audit({ actor: "admin", action: "codigo_gerado", handle, details: { codigo: code.code } });
       return NextResponse.json({ ok: true, code });
     } catch {
       // código repetido (muito raro): tenta outro
@@ -41,5 +43,6 @@ export async function DELETE(req: Request) {
   const code = new URL(req.url).searchParams.get("code");
   if (!code) return NextResponse.json({ ok: false }, { status: 400 });
   await getStore().deleteCode(code);
+  await audit({ actor: "admin", action: "codigo_apagado", details: { codigo: code } });
   return NextResponse.json({ ok: true });
 }

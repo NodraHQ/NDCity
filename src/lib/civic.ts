@@ -1,4 +1,5 @@
 import "server-only";
+import { audit } from "@/lib/audit";
 import { getStore } from "@/lib/db";
 import type { City, Election, HallProposal } from "@/lib/db/types";
 import { findCity } from "@/lib/geo/cities";
@@ -37,6 +38,12 @@ export async function closeElection(e: Election) {
   const winner = ranked[0] && ranked[0].votes > 0 ? ranked[0].handle : null;
   await store.updateElection(e.id, { status: "closed", winnerHandle: winner });
   if (winner) await store.setOffice(e.office, e.uf ?? "", winner, e.id);
+  await audit({
+    actor: "sistema",
+    action: "eleicao_encerrada",
+    handle: winner,
+    details: { cargo: e.office === "president" ? "presidente" : `governador ${e.uf}`, votos: ranked[0]?.votes ?? 0 },
+  });
   return winner;
 }
 
@@ -113,6 +120,13 @@ export async function resolveProposal(city: City): Promise<HallProposal | null> 
   if (!result) return p;
   await store.updateProposal(p.id, result);
   if (result === "approved") await store.setHallStyle(city.id, p.style);
+  await audit({
+    actor: "sistema",
+    action: result === "approved" ? "prefeitura_aprovada" : "prefeitura_rejeitada",
+    handle: p.proposer,
+    citySlug: city.slug,
+    details: { sim: yes, nao: no, moradores: residents },
+  });
   return null;
 }
 

@@ -18,8 +18,8 @@ casinha com o seu @.
 - **População**: carros e pessoas aumentam conforme a cidade ganha casas.
 - **Login do morador**: entra com o mesmo código do resgate ("Já tenho casinha").
 - **Recursos pagos** (liberados manualmente no admin até o gateway ficar pronto):
-  - 💬 Chat da cidade, só entre moradores, com filtro de palavrões (mensal)
-  - 🎨 Personalização das cores da casa (e da prefeitura, para o prefeito)
+  - 💬 Chat da cidade, só entre moradores, com filtro de palavrões (R$ 5/mês)
+  - 🎨 Personalização: cores, 12 modelos prontos e bandeira (R$ 1)
   - 🚚 Caminhão de mudança para trocar de cidade (R$ 5)
 - **Bandeiras**: com a personalização, a casa ganha um mastro com bandeira: a
   do estado (27 bandeiras em pixel art) ou uma desenhada pintando quadradinhos.
@@ -31,7 +31,12 @@ casinha com o seu @.
 - **Admin** (`/admin`), em abas:
   - Casas: lista com filtro por estado/cidade/@ e botão ✕ para remover
   - Ocupação: quanto cada estado e cidade está ocupado, prefeitos e governadores
-  - Códigos, Eleições e Recursos pagos
+  - Acessos: online agora, visitantes por dia, páginas mais vistas e dinheiro
+    movimentado (contador próprio e anônimo; Google Analytics é opcional via
+    `NEXT_PUBLIC_GA_ID`)
+  - Histórico: tudo o que acontece (chegadas, mudanças, pagamentos, códigos,
+    votações, eleições…), com filtro por tipo e por @
+  - Códigos, Eleições e Recursos pagos (com opção de cortesia)
 
 Sem o Supabase configurado, o site roda em **modo teste** (nada fica salvo).
 
@@ -50,7 +55,7 @@ São 3 contas gratuitas: **GitHub** (já tem), **Supabase** (banco de dados) e
    **South America (São Paulo)**. Toque em **Create new project** e espere ~2 min.
 3. No menu (☰), abra **SQL Editor** → **New query**.
 4. Rode, em ordem, os arquivos da pasta [`supabase/migrations`](supabase/migrations)
-   (`0001_init.sql`, `0002_brasil_chat_pagos.sql`, `0003_eleicoes_prefeitura_votada.sql`): abra cada um aqui no
+   (`0001_init.sql`, `0002_brasil_chat_pagos.sql`, `0003_eleicoes_prefeitura_votada.sql`, `0004_historico_acessos.sql`): abra cada um aqui no
    GitHub, toque em **copiar**, cole no SQL Editor e toque em **Run**.
 5. No menu, vá em **Project Settings** → **API** (ou **Data API** / **API Keys**). Anote:
    - **Project URL** (algo como `https://abcd.supabase.co`)

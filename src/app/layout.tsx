@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { SITE_NAME } from "@/config/site";
 import "./globals.css";
+
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID?.replace(/[^\w-]/g, "");
 
 export const metadata: Metadata = {
   title: SITE_NAME,
@@ -18,7 +21,18 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        {children}
+        {GA_ID && (
+          <>
+            {/* Google Analytics (opcional): só liga se NEXT_PUBLIC_GA_ID estiver configurado */}
+            <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
+            <Script id="ga" strategy="afterInteractive">
+              {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${GA_ID}');`}
+            </Script>
+          </>
+        )}
+      </body>
     </html>
   );
 }

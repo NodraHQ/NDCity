@@ -230,3 +230,17 @@ tr.sel td { background: #fff1c2; }
 .banner.vote { top: auto; bottom: 76px; cursor: pointer; }
 button.banner { font-family: var(--font); font-size: 13px; color: var(--accent-ink); width: calc(100% - 32px); }
 .city-page:has(.my-city) .banner.vote, .city-page:has(.chat-fab) .banner.vote { bottom: 70px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn.preset { gap: 6px; }
+.preset .dots { display: inline-flex; border: 1px solid var(--border); }
+.preset .dots i { width: 8px; height: 12px; display: block; }
+.chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; border-bottom: 2px solid var(--border); margin: 8px 0 4px; }
+.chart.small { height: 60px; }
+.chart .col { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.chart .col span { width: 100%; background: var(--accent); border: 1px solid var(--border); border-bottom: none; min-height: 0; }
+.chart .col span.alt { background: #7fc96a; }
+.chart-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.check input { width: auto; }
+table.logs td { white-space: normal; vertical-align: top; }
+table.logs td:first-child { white-space: nowrap; }

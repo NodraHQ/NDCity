@@ -1,8 +1,8 @@
 import type { Feature } from "@/lib/db/types";
 
 /**
- * Produtos pagos. Os preços são provisórios (exceto a mudança, R$ 5):
- * ajuste aqui. Quando o gateway for escolhido, ele cobra o valor daqui e,
+ * Produtos pagos e preços (definidos pelo dono): chat R$ 5/mês,
+ * personalização R$ 1, mudança R$ 5. Para mudar, ajuste aqui. Quando o gateway for escolhido, ele cobra o valor daqui e,
  * ao confirmar o pagamento, chama grantEntitlement com estes dados.
  */
 export const PRODUCTS = {
@@ -10,7 +10,7 @@ export const PRODUCTS = {
     feature: "chat" as Feature,
     label: "Chat da cidade (30 dias)",
     description: "Converse com os vizinhos da sua cidade por 30 dias.",
-    priceCents: 990,
+    priceCents: 500,
     days: 30,
     credits: 0,
   },
@@ -18,7 +18,7 @@ export const PRODUCTS = {
     feature: "customize" as Feature,
     label: "Personalização",
     description: "Escolha as cores da sua casa (e da prefeitura, se você for prefeito). Para sempre.",
-    priceCents: 990,
+    priceCents: 100,
     days: undefined,
     credits: 0,
   },

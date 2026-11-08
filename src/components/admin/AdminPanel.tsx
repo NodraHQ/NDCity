@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildingLabel } from "@/lib/buildings";
-import type { Code, HouseRow, OfficeHolder } from "@/lib/db/types";
+import type { Code, HouseRow, LogEntry, OfficeHolder } from "@/lib/db/types";
 import { STATE_FLAG_UFS } from "@/lib/flags";
 import { type ProductId, PRODUCTS, formatPrice } from "@/lib/payments/products";
 
-type Tab = "codigos" | "casas" | "ocupacao" | "eleicoes" | "recursos";
+type Tab = "acessos" | "historico" | "codigos" | "casas" | "ocupacao" | "eleicoes" | "recursos";
 type CityStat = { slug: string; name: string; uf: string | null; houses: number; lots: number; pct: number; mayor: string | null };
 type StateStat = { uf: string; municipios: number; occupied: number; houses: number; pct: number; governor: string | null };
 type Overview = { houses: HouseRow[]; cities: CityStat[]; states: StateStat[]; president: string | null };
@@ -34,7 +34,7 @@ async function api(url: string, method = "GET", body?: unknown) {
 }
 
 export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "memory" }) {
-  const [tab, setTab] = useState<Tab>("casas");
+  const [tab, setTab] = useState<Tab>("acessos");
   const [overview, setOverview] = useState<Overview | null>(null);
 
   const loadOverview = useCallback(async () => {
@@ -51,6 +51,8 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
   }
 
   const TABS: [Tab, string][] = [
+    ["acessos", "📈 Acessos"],
+    ["historico", "📜 Histórico"],
     ["casas", "🏠 Casas"],
     ["ocupacao", "📊 Ocupação"],
     ["codigos", "🎟 Códigos"],
@@ -83,6 +85,8 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
           <button key={id} className={`btn ${tab === id ? "primary" : ""}`} onClick={() => setTab(id)}>{label}</button>
         ))}
       </nav>
+      {tab === "acessos" && <StatsTab />}
+      {tab === "historico" && <LogsTab />}
       {tab === "casas" && <HousesTab overview={overview} reload={loadOverview} />}
       {tab === "ocupacao" && <OccupancyTab overview={overview} />}
       {tab === "codigos" && <CodesTab />}
@@ -427,11 +431,12 @@ function ElectionsTab() {
 function PerksTab() {
   const [handle, setHandle] = useState("");
   const [product, setProduct] = useState<ProductId>("chat_mensal");
+  const [courtesy, setCourtesy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
 
   async function grant(e: React.FormEvent) {
     e.preventDefault();
-    const j = await api("/api/admin/entitlements", "POST", { handle, product });
+    const j = await api("/api/admin/entitlements", "POST", { handle, product, courtesy });
     if (!j.ok) return setMsg({ text: j.message, error: true });
     const p = j.perks;
     const parts = [
@@ -452,8 +457,238 @@ function PerksTab() {
           <option key={id} value={id}>{PRODUCTS[id].label} — {formatPrice(PRODUCTS[id].priceCents)}</option>
         ))}
       </select>
+      <label className="check">
+        <input type="checkbox" checked={courtesy} onChange={(e) => setCourtesy(e.target.checked)} /> Cortesia (de graça, não conta como pagamento)
+      </label>
       <button className="btn primary" disabled={!handle.trim()}>Liberar</button>
       {msg && <p className={msg.error ? "error" : "ok"}>{msg.text}</p>}
     </form>
+  );
+}
+
+// ---------------------------------------------------------------- acessos
+
+type Stats = {
+  online: { visitors: number; residents: string[] };
+  today: { visitors: number; views: number; houses: number };
+  last30: { visitors: number; views: number };
+  days: { day: string; visitors: number; views: number; houses: number }[];
+  topPages: { path: string; label: string; count: number }[];
+  revenue: {
+    totalCents: number;
+    monthCents: number;
+    last30Cents: number;
+    count: number;
+    byProduct: { label: string; count: number; cents: number }[];
+    recent: { handle: string; label: string; cents: number; at: string; provider: string | null }[];
+  };
+};
+
+const money = (c: number) => formatPrice(c);
+
+function StatsTab() {
+  const [st, setSt] = useState<Stats | null>(null);
+  const load = useCallback(async () => {
+    const j = await api("/api/admin/stats");
+    if (j.ok) setSt(j);
+  }, []);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, [load]);
+  if (!st) return <div className="card">Carregando…</div>;
+  const maxV = Math.max(1, ...st.days.map((d) => d.visitors));
+  const maxH = Math.max(1, ...st.days.map((d) => d.houses));
+  return (
+    <>
+      <div className="stats">
+        <div className="stat"><b>🟢 {st.online.visitors}</b><span>online agora</span></div>
+        <div className="stat"><b>{st.online.residents.length}</b><span>moradores online</span></div>
+        <div className="stat"><b>{st.today.visitors}</b><span>visitantes hoje</span></div>
+        <div className="stat"><b>{st.today.views}</b><span>páginas vistas hoje</span></div>
+        <div className="stat"><b>{st.last30.visitors}</b><span>visitantes (30 dias)</span></div>
+        <div className="stat"><b>{st.today.houses}</b><span>casas novas hoje</span></div>
+      </div>
+      {st.online.residents.length > 0 && (
+        <div className="card">
+          <h2>Moradores online</h2>
+          <p>{st.online.residents.map((h) => `@${h}`).join(", ")}</p>
+        </div>
+      )}
+      <div className="card">
+        <h2>Visitantes por dia (30 dias)</h2>
+        <div className="chart">
+          {st.days.map((d) => (
+            <div key={d.day} className="col" title={`${d.day.slice(8)}/${d.day.slice(5, 7)}: ${d.visitors} visitantes, ${d.views} páginas`}>
+              <span style={{ height: `${(d.visitors / maxV) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+        <div className="chart-axis"><span>{st.days[0].day.slice(8)}/{st.days[0].day.slice(5, 7)}</span><span>hoje</span></div>
+        <h2>Casas novas por dia</h2>
+        <div className="chart small">
+          {st.days.map((d) => (
+            <div key={d.day} className="col" title={`${d.day.slice(8)}/${d.day.slice(5, 7)}: ${d.houses} casas`}>
+              <span className="alt" style={{ height: `${(d.houses / maxH) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="card">
+        <h2>Mais visitadas (7 dias)</h2>
+        <div className="table-wrap">
+          <table>
+            <tbody>
+              {st.topPages.map((p) => <tr key={p.path}><td>{p.label}</td><td>{p.count} visitante{p.count === 1 ? "" : "s"}</td></tr>)}
+              {!st.topPages.length && <tr><td>Sem dados ainda.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="card">
+        <h2>💰 Dinheiro movimentado</h2>
+        <div className="stats">
+          <div className="stat"><b>{money(st.revenue.totalCents)}</b><span>total</span></div>
+          <div className="stat"><b>{money(st.revenue.monthCents)}</b><span>este mês</span></div>
+          <div className="stat"><b>{money(st.revenue.last30Cents)}</b><span>últimos 30 dias</span></div>
+          <div className="stat"><b>{st.revenue.count}</b><span>vendas</span></div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Produto</th><th>Vendas</th><th>Total</th></tr></thead>
+            <tbody>
+              {st.revenue.byProduct.map((p) => <tr key={p.label}><td>{p.label}</td><td>{p.count}</td><td>{money(p.cents)}</td></tr>)}
+              {!st.revenue.byProduct.length && <tr><td colSpan={3}>Nenhuma venda ainda.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <h2>Últimos pagamentos</h2>
+        <div className="table-wrap">
+          <table>
+            <tbody>
+              {st.revenue.recent.map((p, i) => (
+                <tr key={i}><td>{fmtDate(p.at)}</td><td>@{p.handle}</td><td>{p.label}</td><td>{money(p.cents)}</td><td>{p.provider === "manual" ? "Pix manual" : p.provider}</td></tr>
+              ))}
+              {!st.revenue.recent.length && <tr><td>Nenhum pagamento ainda.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// -------------------------------------------------------------- histórico
+
+const LOG_LABELS: Record<string, string> = {
+  chegou: "🏠 chegou",
+  mudou: "🚚 mudou de cidade",
+  removido: "✕ removido pelo admin",
+  entrou: "🔑 entrou na conta",
+  codigo_gerado: "🎟 código gerado",
+  codigo_apagado: "🗑 código apagado",
+  pagamento: "💰 pagamento",
+  cortesia: "🎁 cortesia",
+  casa_pintada: "🎨 pintou a casa",
+  proposta_prefeitura: "📜 propôs pintura da prefeitura",
+  voto_prefeitura: "🗳 votou na pintura da prefeitura",
+  prefeitura_aprovada: "✅ pintura da prefeitura aprovada",
+  prefeitura_rejeitada: "❌ pintura da prefeitura rejeitada",
+  eleicao_criada: "🗳 eleição criada",
+  eleicao_encerrada: "🏁 eleição encerrada",
+  eleicao_cancelada: "❌ eleição cancelada",
+  cargo_removido: "✕ cargo removido",
+  candidatura: "🙋 se candidatou",
+  desistiu: "↩ desistiu da candidatura",
+  votou: "🗳 votou",
+  admin_entrou: "🔐 admin entrou",
+};
+
+function describe(l: LogEntry): string {
+  const d = (l.details ?? {}) as Record<string, unknown>;
+  const city = l.citySlug ? ` · ${l.citySlug}` : "";
+  switch (l.action) {
+    case "chegou":
+      return `${buildingLabel(String(d.tipo ?? ""))}${d.prefeito ? " · virou prefeito(a) 🏛" : ""}${city}`;
+    case "mudou":
+      return `${d.de} → ${d.para} (${buildingLabel(String(d.tipo ?? ""))})${d.prefeito ? " · virou prefeito(a) 🏛" : ""}`;
+    case "pagamento":
+    case "cortesia":
+      return `${d.produto}${d.valor ? ` · ${formatPrice(Math.round(Number(d.valor) * 100))}` : ""}`;
+    case "codigo_gerado":
+    case "codigo_apagado":
+      return String(d.codigo ?? "");
+    case "eleicao_criada":
+      return `${d.cargo} · ${d.dias} dia(s)`;
+    case "eleicao_encerrada":
+      return `${d.cargo}${l.handle ? ` · eleito(a) com ${d.votos} voto(s)` : " · sem vencedor"}`;
+    case "prefeitura_aprovada":
+    case "prefeitura_rejeitada":
+      return `👍 ${d.sim} · 👎 ${d.nao} de ${d.moradores} moradores${city}`;
+    case "voto_prefeitura":
+      return `${d.aprovou ? "👍 sim" : "👎 não"}${city}`;
+    case "votou":
+    case "candidatura":
+    case "desistiu":
+    case "eleicao_cancelada":
+    case "cargo_removido":
+      return String(d.cargo ?? "");
+    default:
+      return city.replace(" · ", "");
+  }
+}
+
+function LogsTab() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [action, setAction] = useState("");
+  const [handle, setHandle] = useState("");
+  const [more, setMore] = useState(true);
+
+  const load = useCallback(
+    async (before?: number) => {
+      const qs = new URLSearchParams();
+      if (before) qs.set("before", String(before));
+      if (action) qs.set("action", action);
+      if (handle.trim()) qs.set("handle", handle.trim());
+      const j = await api(`/api/admin/logs?${qs}`);
+      if (!j.ok) return;
+      setLogs((l) => (before ? [...l, ...j.logs] : j.logs));
+      setMore(j.logs.length === 50);
+    },
+    [action, handle],
+  );
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  return (
+    <div className="card">
+      <h2>Histórico</h2>
+      <div className="filters">
+        <select value={action} onChange={(e) => setAction(e.target.value)}>
+          <option value="">Tudo</option>
+          {Object.entries(LOG_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="Filtrar por @" autoCapitalize="none" />
+      </div>
+      <div className="table-wrap">
+        <table className="logs">
+          <tbody>
+            {logs.map((l) => (
+              <tr key={l.id}>
+                <td>{fmtDate(l.createdAt)}</td>
+                <td>{l.handle ? `@${l.handle}` : l.actor === "admin" ? "admin" : ""}</td>
+                <td>{LOG_LABELS[l.action] ?? l.action}</td>
+                <td className="muted">{describe(l)}</td>
+              </tr>
+            ))}
+            {!logs.length && <tr><td>Nada registrado ainda.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {more && logs.length > 0 && <button className="btn" onClick={() => load(logs[logs.length - 1].id)}>Carregar mais</button>}
+    </div>
   );
 }

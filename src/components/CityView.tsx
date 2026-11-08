@@ -13,6 +13,8 @@ import { darknessFor, localTime, sunElevation } from "@/lib/sun";
 import ChatPanel from "./ChatPanel";
 import ElectionCard, { type ElectionV, officeTitle } from "./ElectionCard";
 import FlagEditor from "./FlagEditor";
+import Tracker from "./Tracker";
+import { PRESETS } from "@/lib/presets";
 
 const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
   ssr: false,
@@ -266,6 +268,7 @@ export default function CityView({ initial }: { initial: CityData }) {
 
   return (
     <main className="city-page">
+      <Tracker path={`/c/${slug}`} />
       <CityCanvas
         seed={city.seed}
         size={city.layoutSize}
@@ -521,6 +524,30 @@ export default function CityView({ initial }: { initial: CityData }) {
         <div className="sheet tall">
           <h3>{step.target === "hall" ? "🏛 Proposta para a prefeitura" : "🎨 Pintar minha casa"}</h3>
           {step.target === "hall" && <p className="muted">Você escolhe; os moradores votam sim ou não (24h). Mais da metade decide.</p>}
+          <div className="palette-row">
+            <span>Modelos prontos</span>
+            <div className="presets">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  className="btn tiny preset"
+                  onClick={() =>
+                    setStep({
+                      ...step,
+                      style: step.target === "hall" ? { ...step.style, wall: p.style.wall, accent: p.style.accent } : { ...step.style, ...p.style },
+                    })
+                  }
+                >
+                  <span className="dots">
+                    <i style={{ background: p.style.wall }} />
+                    <i style={{ background: step.target === "hall" ? p.style.accent : p.style.roof }} />
+                    <i style={{ background: step.target === "hall" ? p.style.wall : p.style.accent }} />
+                  </span>
+                  {p.emoji} {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
           {STYLE_PARTS.filter((part) => step.target === "house" || part.key !== "roof").map((part) => (
             <div key={part.key} className="palette-row">
               <span>{step.target === "hall" ? part.hallLabel : part.label}</span>

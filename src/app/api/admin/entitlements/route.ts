@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
+import { audit } from "@/lib/audit";
 import { getStore } from "@/lib/db";
 import { normalizeHandle } from "@/lib/handle";
 import { isProductId, PRODUCTS } from "@/lib/payments/products";
@@ -15,9 +16,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: "Preencha o @ e o produto." }, { status: 400 });
   const p = PRODUCTS[pid];
   const store = getStore();
+  const courtesy = body?.courtesy === true;
   await store.grantEntitlement(handle, p.feature, { days: p.days, credits: p.credits });
+  if (!courtesy)
+    await store.addPurchase({ handle, product: pid, amountCents: p.priceCents, status: "paid", provider: "manual" });
+  await audit({
+    actor: "admin",
+    action: courtesy ? "cortesia" : "pagamento",
+    handle,
+    details: { produto: p.label, valor: courtesy ? 0 : p.priceCents / 100 },
+  });
   const perks = perksFrom(await store.getEntitlements(handle));
-  return NextResponse.json({ ok: true, message: `Liberado “${p.label}” para @${handle}.`, perks });
+  return NextResponse.json({ ok: true, message: `Liberado “${p.label}” para @${handle}${courtesy ? " (cortesia)" : ""}.`, perks });
 }
 
 /** Ver o que um @ tem liberado. */

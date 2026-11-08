@@ -7,6 +7,7 @@ import { SITE_NAME } from "@/config/site";
 import { findCity, searchCities } from "@/lib/geo/cities";
 import { localTime } from "@/lib/sun";
 import ElectionCard, { type ElectionV, officeTitle } from "../ElectionCard";
+import Tracker from "../Tracker";
 import type { ActiveInfo } from "./scene";
 
 const WorldCanvas = dynamic(() => import("./WorldCanvas"), {
@@ -63,6 +64,7 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
 
   return (
     <main className="city-page">
+      <Tracker path="/" />
       <WorldCanvas active={active} selected={selected} focusKey={focusKey} onCityTap={setSelected} zoomRef={zoomRef} />
 
       <header className="topbar world">

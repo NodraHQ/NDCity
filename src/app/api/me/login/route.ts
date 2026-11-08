@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { normalizeCode } from "@/lib/codes";
+import { audit } from "@/lib/audit";
 import { getStore } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { startSession } from "@/lib/resident";
@@ -21,5 +22,6 @@ export async function POST(req: Request) {
     });
   }
   await startSession(code.instagramHandle);
+  await audit({ actor: code.instagramHandle, action: "entrou", handle: code.instagramHandle, citySlug: house.citySlug });
   return NextResponse.json({ ok: true, handle: code.instagramHandle, citySlug: house.citySlug });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { proposeHall } from "@/lib/civic";
 import { getStore } from "@/lib/db";
 import { currentResident } from "@/lib/resident";
@@ -23,6 +24,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, message: "Só o prefeito pode pintar a prefeitura." }, { status: 403 });
     if (!style) return NextResponse.json({ ok: false, message: "Escolha alguma mudança." }, { status: 400 });
     const { approvedNow } = await proposeHall(city, r.handle, style);
+    await audit({ actor: r.handle, action: "proposta_prefeitura", handle: r.handle, citySlug: city.slug, details: { aprovada_na_hora: approvedNow } });
     return NextResponse.json({
       ok: true,
       message: approvedNow
@@ -31,6 +33,7 @@ export async function POST(req: Request) {
     });
   } else {
     await store.setHouseStyle(r.handle, style);
+    await audit({ actor: r.handle, action: "casa_pintada", handle: r.handle, citySlug: r.house.citySlug, details: { bandeira: !!style?.flag } });
   }
   return NextResponse.json({ ok: true });
 }

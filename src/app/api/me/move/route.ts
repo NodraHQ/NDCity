@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { isBuildingType } from "@/lib/buildings";
 import { ensureCityRow, lotCountFor } from "@/lib/city-data";
 import { getStore } from "@/lib/db";
@@ -32,5 +33,12 @@ export async function POST(req: Request) {
     buildingType: isBuildingType(buildingType) ? buildingType : null,
   });
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error, message: ERRORS[res.error] });
+  await audit({
+    actor: r.handle,
+    action: "mudou",
+    handle: r.handle,
+    citySlug,
+    details: { de: r.house.citySlug, para: citySlug, tipo: res.claim.buildingType, prefeito: res.isMayor },
+  });
   return NextResponse.json({ ok: true, lotIndex: res.claim.lotIndex, isMayor: res.isMayor });
 }

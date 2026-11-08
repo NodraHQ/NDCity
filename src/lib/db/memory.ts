@@ -10,10 +10,13 @@ import type {
   Entitlement,
   HallProposal,
   HouseRow,
+  LogEntry,
   Message,
   MoveResult,
   OfficeHolder,
+  Purchase,
   Store,
+  VisitRow,
 } from "./types";
 
 /**
@@ -35,6 +38,9 @@ type Data = {
   offices: OfficeHolder[];
   proposals: HallProposal[];
   hallVotes: { proposalId: string; handle: string; approve: boolean }[];
+  logs: LogEntry[];
+  visits: VisitRow[];
+  purchases: Purchase[];
 };
 
 const g = globalThis as unknown as { __cidadezinhaMem?: Data };
@@ -54,6 +60,9 @@ function data(): Data {
     offices: [],
     proposals: [],
     hallVotes: [],
+    logs: [],
+    visits: [],
+    purchases: [],
   };
   return g.__cidadezinhaMem;
 }
@@ -355,5 +364,45 @@ export const memoryStore: Store = {
     let no = 0;
     for (const v of data().hallVotes) if (v.proposalId === proposalId) v.approve ? yes++ : no++;
     return { yes, no };
+  },
+
+  async addLog(entry) {
+    const d = data();
+    d.logs.unshift({
+      id: (d.logs[0]?.id ?? 0) + 1,
+      createdAt: now(),
+      actor: entry.actor,
+      action: entry.action,
+      handle: entry.handle ?? null,
+      citySlug: entry.citySlug ?? null,
+      details: entry.details ?? null,
+    });
+  },
+  async listLogs({ limit, beforeId, action, handle }) {
+    return data()
+      .logs.filter((l) => (!beforeId || l.id < beforeId) && (!action || l.action === action) && (!handle || l.handle === handle || l.actor === handle))
+      .slice(0, limit);
+  },
+  async trackVisit(visitorId, handle, path, view) {
+    const d = data();
+    const day = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+    let v = d.visits.find((x) => x.visitorId === visitorId && x.day === day);
+    if (!v) {
+      v = { visitorId, day, firstAt: now(), lastAt: now(), views: 0, handle, lastPath: path };
+      d.visits.push(v);
+    }
+    v.lastAt = now();
+    v.handle = handle ?? v.handle;
+    v.lastPath = path;
+    if (view) v.views++;
+  },
+  async listVisits(sinceDay) {
+    return data().visits.filter((v) => v.day >= sinceDay);
+  },
+  async addPurchase(p) {
+    data().purchases.unshift({ ...p, id: randomUUID(), createdAt: now() });
+  },
+  async listPurchases() {
+    return data().purchases;
   },
 };
