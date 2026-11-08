@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { INSTAGRAM_PROFILE } from "@/config/site";
 import { isProductId, PAYMENTS_ENABLED, PRODUCTS } from "@/lib/payments/products";
 import { currentResident } from "@/lib/resident";
 
@@ -16,11 +15,10 @@ export async function POST(req: Request) {
   if (!isProductId(pid)) return NextResponse.json({ ok: false, message: "Produto inválido." }, { status: 400 });
   const product = PRODUCTS[pid];
   if (!PAYMENTS_ENABLED) {
-    const who = INSTAGRAM_PROFILE ? `@${INSTAGRAM_PROFILE}` : "o perfil";
     return NextResponse.json({
       ok: false,
       pending: true,
-      message: `O pagamento online chega em breve! Por enquanto, mande uma DM para ${who} pedindo “${product.label}” que a gente libera.`,
+      message: `O pagamento online chega em breve! Por enquanto, fale com a equipe do NDCity pedindo “${product.label}” que a gente libera.`,
     });
   }
   return NextResponse.json({ ok: false, message: "Gateway ainda não configurado." }, { status: 501 });

@@ -165,6 +165,31 @@ export const memoryStore: Store = {
     }
     return { ok: true, claim, isMayor };
   },
+  async claimDirect(input): Promise<ClaimResult> {
+    const d = data();
+    const city = d.cities.find((c) => c.slug === input.citySlug);
+    if (!city) return { ok: false, error: "city_not_found" };
+    if (input.lotIndex < 0 || input.lotIndex >= input.lotCount) return { ok: false, error: "invalid_lot" };
+    if (d.claims.some((c) => c.instagramHandle === input.handle)) return { ok: false, error: "handle_has_house" };
+    if (d.claims.some((c) => c.cityId === city.id && c.lotIndex === input.lotIndex)) return { ok: false, error: "lot_taken" };
+    const claim: Claim = {
+      id: randomUUID(),
+      cityId: city.id,
+      lotIndex: input.lotIndex,
+      instagramHandle: input.handle,
+      buildingType: input.buildingType,
+      style: null,
+      createdAt: now(),
+    };
+    d.claims.push(claim);
+    let isMayor = false;
+    if (!city.mayorHandle) {
+      city.mayorHandle = input.handle;
+      city.unlockedAt = claim.createdAt;
+      isMayor = true;
+    }
+    return { ok: true, claim, isMayor };
+  },
   async moveHouse({ handle, citySlug, lotIndex, lotCount, buildingType }): Promise<MoveResult> {
     const d = data();
     const claim = d.claims.find((c) => c.instagramHandle === handle);
@@ -410,6 +435,12 @@ export const memoryStore: Store = {
   },
   async setPasswordHash(handle, hash) {
     data().accounts.set(handle, hash);
+  },
+  async createAccount(handle, hash) {
+    const d = data();
+    if (d.accounts.has(handle)) return false;
+    d.accounts.set(handle, hash);
+    return true;
   },
   async createLoginCode(code, handle, expiresAt) {
     data().loginCodes.push({ code, handle, expiresAt, usedAt: null });

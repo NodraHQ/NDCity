@@ -42,23 +42,26 @@ export async function issueClaimCode(handle: string, source: "admin" | "bot") {
   throw new Error("não consegui gerar o código");
 }
 
-/** O código certo para cada pessoa + a mensagem pronta para a DM. */
+/**
+ * Código de acesso para quem esqueceu a senha + mensagem pronta para a DM.
+ * Só para @ que já tem conta (com ou sem casa).
+ */
 export async function codeForHandle(handle: string, source: "admin" | "bot", siteUrl: string) {
-  const house = await getStore().findClaimByHandle(handle);
-  if (house) {
+  const store = getStore();
+  const house = await store.findClaimByHandle(handle);
+  if (house || (await store.getPasswordHash(handle))) {
     const { code, expiresAt } = await issueLoginCode(handle, source);
     return {
       kind: "acesso" as const,
       code,
       expiresAt,
-      message: `Seu código de acesso do NDCity: ${code}\nEntre em ${siteUrl}, toque em “Já tenho casinha” e use seu @ + este código. Vale por ${24}h e só uma vez.`,
+      message: `Seu código de acesso do NDCity: ${code}\nEntre em ${siteUrl}, toque em “Entrar” e use seu usuário + este código no lugar da senha. Vale por 24h e só uma vez. Depois crie uma senha nova no menu.`,
     };
   }
-  const { code } = await issueClaimCode(handle, source);
   return {
-    kind: "resgate" as const,
-    code,
+    kind: "sem_conta" as const,
+    code: null,
     expiresAt: null,
-    message: `Seu código do NDCity: ${code}\nResgate sua casinha em ${siteUrl}: escolha sua cidade no mapa e toque em “Resgatar casinha”.`,
+    message: `Crie sua conta no NDCity em ${siteUrl}: toque em “Criar conta”, escolha sua cidade e ganhe sua casinha!`,
   };
 }

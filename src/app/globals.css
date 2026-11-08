@@ -255,3 +255,6 @@ table.logs td:first-child { white-space: nowrap; }
 
 .modal input.normal-case { text-transform: none; letter-spacing: 0; }
 .modal .row.between { justify-content: space-between; flex-wrap: wrap; }
+
+.home-actions { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+button.banner.vote { width: auto; left: 16px; right: 76px; margin: 0; max-width: 560px; }

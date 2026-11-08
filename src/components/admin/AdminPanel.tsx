@@ -55,7 +55,7 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
     ["historico", "📜 Histórico"],
     ["casas", "🏠 Casas"],
     ["ocupacao", "📊 Ocupação"],
-    ["codigos", "🎟 Códigos"],
+    ["codigos", "🔑 Acesso"],
     ["eleicoes", "🗳 Eleições"],
     ["recursos", "✨ Recursos pagos"],
     ["integracao", "🤖 Integração"],
@@ -156,7 +156,7 @@ function HousesTab({ overview, reload }: { overview: Overview | null; reload: ()
             {shown.map((h) => (
               <tr key={h.handle}>
                 <td>
-                  <a href={`https://instagram.com/${h.handle}`} target="_blank" rel="noreferrer">@{h.handle}</a>
+                  @{h.handle}
                   {h.isMayor && " 🏛"}
                 </td>
                 <td><a href={`/c/${h.citySlug}`}>{h.cityName}</a></td>
@@ -281,13 +281,13 @@ function CodesTab() {
   return (
     <>
       <form className="card" onSubmit={generate}>
-        <h2>Gerar código</h2>
+        <h2>🔑 Código de acesso</h2>
         <p>
-          Digite o @ do Instagram da pessoa. Se ela ainda não tem casa, sai um código de <b>resgate</b> (NDC-…). Se já tem, sai um
-          código de <b>acesso</b> (ENT-…) para entrar de novo: vale uma vez só, por 24h.
+          Para quem esqueceu a senha: digite o nome de usuário e mande o <b>código de acesso</b> (ENT-…) para a pessoa. Ela entra com
+          usuário + código no lugar da senha e depois cria uma senha nova. Vale uma vez só, por 24h.
         </p>
         <div className="row">
-          <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@fulano" autoCapitalize="none" autoComplete="off" />
+          <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="nome de usuário" autoCapitalize="none" autoComplete="off" />
           <button className="btn primary" disabled={busy || !handle.trim()}>Gerar</button>
         </div>
         {msg && <p className={msg.error ? "error" : "ok"}>{msg.text}</p>}
@@ -609,6 +609,7 @@ const LOG_LABELS: Record<string, string> = {
   votou: "🗳 votou",
   admin_entrou: "🔐 admin entrou",
   codigo_acesso: "🔑 código de acesso gerado",
+  conta_criada: "🆕 criou conta",
   senha_criada: "🔒 criou senha",
   senha_trocada: "🔒 trocou a senha",
 };
@@ -703,7 +704,7 @@ function LogsTab() {
 
 // ------------------------------------------------------- código emitido
 
-type Issued = { handle: string; kind: "acesso" | "resgate"; code: string; expiresAt: string | null; message: string };
+type Issued = { handle: string; kind: "acesso" | "resgate" | "sem_conta"; code: string | null; expiresAt: string | null; message: string };
 
 function IssuedCode({ issued, onClose }: { issued: Issued; onClose?: () => void }) {
   const [copied, setCopied] = useState("");
@@ -715,18 +716,18 @@ function IssuedCode({ issued, onClose }: { issued: Issued; onClose?: () => void 
     <div className="new-code">
       <div className="row between">
         <p>
-          {issued.kind === "acesso" ? "🔑 Código de acesso" : "🎟 Código de resgate"} para <b>@{issued.handle}</b>
+          {issued.kind === "acesso" ? "🔑 Código de acesso" : "Conta"} para <b>{issued.handle}</b>
           {issued.expiresAt ? ` · vale até ${fmtDate(issued.expiresAt)}, uma vez só` : ""}
         </p>
         {onClose && <button className="btn tiny" onClick={onClose}>✕</button>}
       </div>
-      <div className="code">{issued.code}</div>
+      {issued.code ? <div className="code">{issued.code}</div> : <p className="error">Esse usuário não tem conta.</p>}
       <div className="row wrap left">
-        <button type="button" className="btn" onClick={() => copy(issued.code, "código")}>Copiar código</button>
+        {issued.code && <button type="button" className="btn" onClick={() => copy(issued.code!, "código")}>Copiar código</button>}
         <button type="button" className="btn" onClick={() => copy(issued.message, "mensagem")}>Copiar mensagem pra DM</button>
         {copied && <span className="ok">✓ {copied} copiado</span>}
       </div>
-      {issued.kind === "acesso" && <p className="muted">Confira se quem pediu na DM é mesmo o @{issued.handle} antes de mandar.</p>}
+      {issued.kind === "acesso" && <p className="muted">Confira se quem pediu é mesmo o dono da conta {issued.handle} antes de mandar.</p>}
     </div>
   );
 }
@@ -754,16 +755,15 @@ function IntegrationTab() {
     <div className="card">
       <h2>🤖 Ferramenta de DM (bot)</h2>
       <p>
-        Qualquer ferramenta de DM que consiga <b>chamar um link</b> (ManyChat, Make, n8n, ReplyKaro se tiver essa opção…) pode
-        mandar um código diferente para cada pessoa: ela chama o endereço abaixo com o @ de quem escreveu e cola a resposta na DM.
-        Quem não tem casa recebe o código de resgate; quem já tem recebe um código de acesso (uso único, 24h).
+        Opcional. Se um dia você usar uma ferramenta que consiga <b>chamar um link</b> (Make, n8n, ManyChat…), ela pode entregar
+        sozinha o código de acesso para quem esqueceu a senha: chama o endereço abaixo com o nome de usuário e cola a resposta na
+        mensagem. Quem ainda não tem conta recebe o convite para criar uma.
       </p>
       {!info.configured && <p className="error">A chave do bot (BOT_SECRET) não está configurada na Vercel.</p>}
       <p><b>Jeito mais simples (GET, resposta em texto pronto):</b></p>
       <div className="code small">{getUrl}</div>
       <p className="muted">
-        Troque <code>{"{{username}}"}</code> pela variável de @ da sua ferramenta. Ligue a opção “só para seguidores” na
-        ferramenta, para só quem segue receber código.
+        Troque <code>{"{{username}}"}</code> pela variável de nome de usuário da sua ferramenta.
       </p>
       <p><b>Ou POST com JSON</b> (resposta com <code>code</code> e <code>message</code>):</p>
       <div className="code small">

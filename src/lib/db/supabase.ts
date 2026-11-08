@@ -159,6 +159,19 @@ export const supabaseStore: Store = {
     if (!res.ok || !res.claim) return { ok: false, error: (res.error ?? "code_not_found") as never };
     return { ok: true, claim: toClaim(res.claim), isMayor: !!res.is_mayor };
   },
+  async claimDirect(input): Promise<ClaimResult> {
+    const res = check(
+      await db().rpc("claim_house_direct", {
+        p_handle: input.handle,
+        p_city_slug: input.citySlug,
+        p_lot_index: input.lotIndex,
+        p_lot_count: input.lotCount,
+        p_building: input.buildingType,
+      }),
+    ) as { ok: boolean; error?: string; claim?: ClaimRow; is_mayor?: boolean };
+    if (!res.ok || !res.claim) return { ok: false, error: (res.error ?? "lot_taken") as never };
+    return { ok: true, claim: toClaim(res.claim), isMayor: !!res.is_mayor };
+  },
   async moveHouse({ handle, citySlug, lotIndex, lotCount, buildingType }): Promise<MoveResult> {
     const res = check(
       await db().rpc("move_house", {
@@ -423,6 +436,14 @@ export const supabaseStore: Store = {
   },
   async setPasswordHash(handle, hash) {
     check(await db().from("accounts").upsert({ handle, password_hash: hash, updated_at: new Date().toISOString() }));
+  },
+  async createAccount(handle, hash) {
+    const res = await db().from("accounts").insert({ handle, password_hash: hash });
+    if (res.error) {
+      if (res.error.code === "23505") return false; // já existe
+      throw new Error(`Supabase: ${res.error.message}`);
+    }
+    return true;
   },
   async createLoginCode(code, handle, expiresAt, source) {
     check(await db().from("login_codes").insert({ code, handle, expires_at: expiresAt, source }));

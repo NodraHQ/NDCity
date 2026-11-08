@@ -119,6 +119,14 @@ export type HallProposal = {
   createdAt: string;
 };
 
+export type DirectClaimInput = {
+  handle: string;
+  citySlug: string;
+  lotIndex: number;
+  lotCount: number;
+  buildingType: BuildingType;
+};
+
 export type ClaimInput = {
   code: string;
   citySlug: string;
@@ -151,6 +159,8 @@ export interface Store {
   listClaims(cityId: string): Promise<Claim[]>;
   findClaimByHandle(handle: string): Promise<(Claim & { citySlug: string }) | null>;
   claim(input: ClaimInput): Promise<ClaimResult>;
+  /** Resgate de quem já tem conta (sem código). */
+  claimDirect(input: DirectClaimInput): Promise<ClaimResult>;
   moveHouse(input: {
     handle: string;
     citySlug: string;
@@ -208,6 +218,8 @@ export interface Store {
   // senha e códigos de acesso
   getPasswordHash(handle: string): Promise<string | null>;
   setPasswordHash(handle: string, hash: string): Promise<void>;
+  /** Cria a conta. Devolve false se o @ já tem conta. */
+  createAccount(handle: string, hash: string): Promise<boolean>;
   createLoginCode(code: string, handle: string, expiresAt: string, source: string): Promise<void>;
   /**
    * Usa o código (uma vez só). Devolve o @ ou null se não existe, já foi usado,

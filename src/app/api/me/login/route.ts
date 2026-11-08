@@ -8,10 +8,11 @@ import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { startSession } from "@/lib/resident";
 
 /**
- * "Já tenho casinha". Três jeitos de entrar:
- * 1. @ + senha (criada pela pessoa depois do primeiro acesso);
- * 2. código de acesso ENT-… (uso único, pedido por DM ou gerado no admin);
- * 3. o código do resgate NDC-…, só enquanto a pessoa ainda não criou senha.
+ * Entrar. Jeitos de entrar:
+ * 1. @ + senha (o normal);
+ * 2. código de acesso ENT-… (uso único, gerado pelo admin para quem esqueceu a senha);
+ * 3. o código antigo de resgate NDC-…, só para quem entrou antes da conta
+ *    normal existir e ainda não criou senha.
  */
 export async function POST(req: Request) {
   if (!rateLimit(`login:${clientIp(req)}`, 10, 60_000))
@@ -31,29 +32,30 @@ export async function POST(req: Request) {
     if (!handle)
       return NextResponse.json({
         ok: false,
-        message: "Esse código de acesso não vale (confira o @, ou ele já foi usado ou expirou). Peça outro por DM.",
+        message: "Esse código de acesso não vale (confira o usuário, ou ele já foi usado ou expirou).",
       });
     method = "codigo_acesso";
   } else if (/^NDC/i.test(secret.replace(/[^A-Za-z]/g, ""))) {
     const code = await store.getCode(normalizeCode(secret));
     if (!code) return NextResponse.json({ ok: false, message: "Código não encontrado." });
     if (await store.getPasswordHash(code.instagramHandle))
-      return NextResponse.json({ ok: false, message: "Você já criou uma senha: entre com seu @ + senha. Esqueceu? Peça um código de acesso por DM." });
+      return NextResponse.json({ ok: false, message: "Você já criou uma senha: entre com seu usuário + senha." });
     handle = code.instagramHandle;
     method = "codigo_resgate";
   } else {
-    if (!isValidHandle(handleIn)) return NextResponse.json({ ok: false, message: "Digite seu @ do Instagram." }, { status: 400 });
+    if (!isValidHandle(handleIn)) return NextResponse.json({ ok: false, message: "Digite seu nome de usuário." }, { status: 400 });
     if (!rateLimit(`login-handle:${handleIn}`, 8, 15 * 60_000))
-      return NextResponse.json({ ok: false, message: "Muitas tentativas para esse @. Espere 15 minutos ou peça um código por DM." }, { status: 429 });
+      return NextResponse.json({ ok: false, message: "Muitas tentativas para esse usuário. Espere 15 minutos." }, { status: 429 });
     const hash = await store.getPasswordHash(handleIn);
-    if (!hash || !(await verifyPassword(secret, hash))) return NextResponse.json({ ok: false, message: "@ ou senha errados." });
+    if (!hash || !(await verifyPassword(secret, hash))) return NextResponse.json({ ok: false, message: "Usuário ou senha errados." });
     handle = handleIn;
     method = "senha";
   }
 
   const house = await store.findClaimByHandle(handle);
-  if (!house) return NextResponse.json({ ok: false, message: "Esse @ ainda não tem casinha. Toque em “Resgatar casinha”." });
+  const hasPassword = !!(await store.getPasswordHash(handle));
+  if (!house && !hasPassword) return NextResponse.json({ ok: false, message: "Esse usuário não existe. Toque em “Criar conta”." });
   await startSession(handle);
-  await audit({ actor: handle, action: "entrou", handle, citySlug: house.citySlug, details: { jeito: method } });
-  return NextResponse.json({ ok: true, handle, citySlug: house.citySlug, hasPassword: !!(await store.getPasswordHash(handle)) });
+  await audit({ actor: handle, action: "entrou", handle, citySlug: house?.citySlug ?? null, details: { jeito: method } });
+  return NextResponse.json({ ok: true, handle, citySlug: house?.citySlug ?? null, hasPassword });
 }

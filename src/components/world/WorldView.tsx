@@ -8,6 +8,7 @@ import { findCity, searchCities } from "@/lib/geo/cities";
 import { localTime } from "@/lib/sun";
 import ElectionCard, { type ElectionV, officeTitle } from "../ElectionCard";
 import LoginDialog, { type LoginResult } from "../LoginDialog";
+import SignupDialog from "../SignupDialog";
 import Tracker from "../Tracker";
 import type { ActiveInfo } from "./scene";
 
@@ -29,9 +30,26 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
   const [elections, setElections] = useState<ElectionV[]>([]);
   const [showElections, setShowElections] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
+  const [pendingCity, setPendingCity] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  async function reloadMe() {
+    const j = await fetch("/api/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    setMe(j?.resident ?? null);
+  }
 
   function onLogin(r: LoginResult) {
-    window.location.href = `/c/${r.citySlug}${r.hasPassword ? "" : "?senha=1"}`;
+    setShowLogin(false);
+    if (r.citySlug) window.location.href = `/c/${r.citySlug}${r.hasPassword ? "" : "?senha=1"}`;
+    else if (pendingCity) window.location.href = `/c/${pendingCity}?morar=1`;
+    else reloadMe();
+  }
+
+  function onSignup() {
+    setShowSignup(false);
+    if (pendingCity) window.location.href = `/c/${pendingCity}?morar=1`;
+    else reloadMe();
   }
 
   useEffect(() => {
@@ -82,6 +100,7 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
         </div>
         <div className="search">
           <input
+            ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="🔍 Buscar cidade…"
@@ -125,9 +144,27 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
       )}
 
       {!me && !selected && !showElections && (
-        <button className="btn my-city" onClick={() => setShowLogin(true)}>🔑 Entrar</button>
+        <div className="home-actions">
+          <button className="btn primary" onClick={() => { setPendingCity(null); setShowSignup(true); }}>🏠 Criar conta</button>
+          <button className="btn" onClick={() => setShowLogin(true)}>🔑 Entrar</button>
+        </div>
       )}
-      {showLogin && <LoginDialog onClose={() => setShowLogin(false)} onSuccess={onLogin} />}
+      {me && !me.citySlug && !selected && !showElections && (
+        <button className="banner vote" onClick={() => searchRef.current?.focus()}>
+          👋 Olá, {me.handle}! Agora escolha sua cidade: <b>busque pelo nome ou toque no mapa</b>.
+        </button>
+      )}
+      {showLogin && (
+        <LoginDialog onClose={() => setShowLogin(false)} onSuccess={onLogin} onSignup={() => { setShowLogin(false); setShowSignup(true); }} />
+      )}
+      {showSignup && (
+        <SignupDialog
+          cityName={pendingCity ? findCity(pendingCity)?.name : undefined}
+          onClose={() => setShowSignup(false)}
+          onSuccess={onSignup}
+          onLogin={() => { setShowSignup(false); setShowLogin(true); }}
+        />
+      )}
 
       {myCity && !selected && !showElections && (
         <Link className="btn primary my-city" href={`/c/${myCity.slug}`}>
@@ -157,8 +194,20 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
             <p>🔒 Ninguém mora aqui ainda. Quem resgatar a primeira casinha vira <b>prefeito</b> e libera a cidade!</p>
           )}
           {governor && <p className="muted">Governador(a) de {city.uf}: <b>@{governor}</b></p>}
-          <div className="row">
-            <Link className="btn primary" href={`/c/${city.slug}`}>Visitar {city.name} →</Link>
+          <div className="row wrap">
+            {me && !me.citySlug ? (
+              <>
+                <Link className="btn" href={`/c/${city.slug}`}>Visitar</Link>
+                <Link className="btn primary" href={`/c/${city.slug}?morar=1`}>🏠 Morar em {city.name}</Link>
+              </>
+            ) : !me ? (
+              <>
+                <Link className="btn" href={`/c/${city.slug}`}>Visitar</Link>
+                <button className="btn primary" onClick={() => { setPendingCity(city.slug); setShowSignup(true); }}>🏠 Morar aqui</button>
+              </>
+            ) : (
+              <Link className="btn primary" href={`/c/${city.slug}`}>Visitar {city.name} →</Link>
+            )}
           </div>
         </div>
       )}

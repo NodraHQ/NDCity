@@ -1,22 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { INSTAGRAM_PROFILE } from "@/config/site";
 
-export type LoginResult = { handle: string; citySlug: string; hasPassword: boolean };
+export type LoginResult = { handle: string; citySlug: string | null; hasPassword: boolean };
 
 /**
  * Janela de "Entrar": @ + senha (ou código de acesso/resgate) e a tela de
  * "Esqueci minha senha". Usada no mapa do Brasil e nas cidades.
  */
-export default function LoginDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: (r: LoginResult) => void }) {
+export default function LoginDialog({
+  onClose,
+  onSuccess,
+  onSignup,
+}: {
+  onClose: () => void;
+  onSuccess: (r: LoginResult) => void;
+  onSignup?: () => void;
+}) {
   const [view, setView] = useState<"login" | "forgot">("login");
   const [handle, setHandle] = useState("");
   const [secret, setSecret] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const profile = INSTAGRAM_PROFILE ? <b>@{INSTAGRAM_PROFILE}</b> : "o perfil";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,12 +44,12 @@ export default function LoginDialog({ onClose, onSuccess }: { onClose: () => voi
       {view === "login" ? (
         <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
           <h2>Entrar</h2>
-          <p>Use seu @ do Instagram e sua senha. Ainda não criou senha? Use o código que recebeu por DM.</p>
+          <p>Entre com seu nome de usuário e sua senha.</p>
           <input
             autoFocus
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
-            placeholder="@seu.instagram"
+            placeholder="nome de usuário"
             autoCapitalize="none"
             autoComplete="username"
             spellCheck={false}
@@ -53,7 +59,7 @@ export default function LoginDialog({ onClose, onSuccess }: { onClose: () => voi
             type={show ? "text" : "password"}
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
-            placeholder="Senha ou código"
+            placeholder="senha"
             autoComplete="current-password"
             spellCheck={false}
             className="normal-case"
@@ -63,7 +69,10 @@ export default function LoginDialog({ onClose, onSuccess }: { onClose: () => voi
           </label>
           {error && <p className="error">{error}</p>}
           <div className="row between">
-            <button type="button" className="login-switch" onClick={() => setView("forgot")}>Esqueci minha senha</button>
+            <span className="row left">
+              <button type="button" className="login-switch" onClick={() => setView("forgot")}>Esqueci minha senha</button>
+              {onSignup && <button type="button" className="login-switch" onClick={onSignup}>Criar conta</button>}
+            </span>
             <div className="row">
               <button type="button" className="btn" onClick={onClose}>Cancelar</button>
               <button className="btn primary" disabled={busy || secret.trim().length < 4}>{busy ? "Entrando…" : "Entrar"}</button>
@@ -74,14 +83,11 @@ export default function LoginDialog({ onClose, onSuccess }: { onClose: () => voi
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <h2>🔑 Esqueceu a senha?</h2>
           <p>
-            Sem problema! Mande <b>ENTRAR</b> por DM para {profile} no Instagram. Você recebe na hora um <b>código de acesso</b> (vale uma
-            vez, por 24h).
+            Sem problema! Fale com a equipe do NDCity e diga seu nome de usuário. Você recebe um <b>código de acesso</b> (vale uma vez,
+            por 24h).
           </p>
-          <p>Depois volte aqui e entre com seu @ + o código. Aí é só criar uma senha nova.</p>
+          <p>Depois volte aqui e entre com seu usuário + o código no lugar da senha. Aí é só criar uma senha nova no menu.</p>
           <div className="row wrap">
-            {INSTAGRAM_PROFILE && (
-              <a className="btn" href={`https://ig.me/m/${INSTAGRAM_PROFILE}`} target="_blank" rel="noreferrer">Abrir DM no Instagram</a>
-            )}
             <button className="btn primary" onClick={() => setView("login")}>Já tenho o código</button>
           </div>
         </div>

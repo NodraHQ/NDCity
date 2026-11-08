@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { INSTAGRAM_PROFILE } from "@/config/site";
 import { BUILDING_TYPES, type BuildingType, buildingLabel } from "@/lib/buildings";
 import { generateCity } from "@/lib/city/generate";
 import type { CityData } from "@/lib/city-data";
@@ -14,6 +13,7 @@ import ChatPanel from "./ChatPanel";
 import ElectionCard, { type ElectionV, officeTitle } from "./ElectionCard";
 import FlagEditor from "./FlagEditor";
 import LoginDialog, { type LoginResult } from "./LoginDialog";
+import SignupDialog from "./SignupDialog";
 import Tracker from "./Tracker";
 import { PRESETS } from "@/lib/presets";
 
@@ -29,7 +29,7 @@ type Me = { handle: string; citySlug: string | null; perks: Perks; hasPassword?:
 
 type Step =
   | { name: "idle" }
-  | { name: "code"; error?: string; busy?: boolean }
+  | { name: "signup" }
   | { name: "login" }
   | { name: "password"; first?: boolean; redirect?: string; error?: string; busy?: boolean }
   | { name: "type"; purpose: "claim" | "move"; code: string; handle: string }
@@ -80,7 +80,7 @@ export default function CityView({ initial }: { initial: CityData }) {
   const [step, setStep] = useState<Step>({ name: "idle" });
   const [info, setInfo] = useState<Info>(null);
   const [focusLot, setFocusLot] = useState<number | null>(null);
-  const [codeInput, setCodeInput] = useState("");
+  const wantsToMove = useRef(false);
   const [pwInput, setPwInput] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [clock, setClock] = useState("");
@@ -110,6 +110,10 @@ export default function CityView({ initial }: { initial: CityData }) {
   }, [slug]);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("morar") === "1") {
+      window.history.replaceState(null, "", window.location.pathname);
+      wantsToMove.current = true;
+    }
     if (new URLSearchParams(window.location.search).get("senha") === "1") {
       window.history.replaceState(null, "", window.location.pathname);
       setStep({ name: "password", first: true });
@@ -133,11 +137,20 @@ export default function CityView({ initial }: { initial: CityData }) {
     return () => clearInterval(id);
   }, [city.timezone]);
 
+  useEffect(() => {
+    if (wantsToMove.current && me && !me.citySlug) {
+      wantsToMove.current = false;
+      startClaim(me.handle);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
+
   const occupied = useMemo(() => new Set(data.houses.map((h) => h.lotIndex)), [data.houses]);
   const freeCount = lotCount - occupied.size;
   const locked = !city.mayorHandle;
   const livesHere = !!me && me.citySlug === slug;
   const livesElsewhere = !!me?.citySlug && me.citySlug !== slug;
+  const homeless = !!me && !me.citySlug;
   const isMayor = livesHere && city.mayorHandle === me!.handle;
   const myHouse = livesHere ? data.houses.find((h) => h.handle === me!.handle) : undefined;
 
@@ -158,16 +171,15 @@ export default function CityView({ initial }: { initial: CityData }) {
 
   // ------------------------------------------------------------ ações
 
-  async function submitCode(e: React.FormEvent) {
-    e.preventDefault();
-    setStep({ name: "code", busy: true });
-    const json = await postJSON("/api/claim/check", { code: codeInput });
-    if (!json.ok) return setStep({ name: "code", error: json.message });
-    setStep({ name: "type", purpose: "claim", code: json.code, handle: json.handle });
+  /** Logado e sem casa: começa a escolha do tipo de construção. */
+  function startClaim(handle: string) {
+    setInfo(null);
+    setStep({ name: "type", purpose: "claim", code: "", handle });
   }
 
   async function onLogin(json: LoginResult) {
     await refreshMe();
+    if (!json.citySlug) return startClaim(json.handle);
     const redirect = json.citySlug && json.citySlug !== slug ? `/c/${json.citySlug}` : undefined;
     if (!json.hasPassword) return setStep({ name: "password", first: true, redirect });
     setStep({ name: "idle" });
@@ -201,14 +213,13 @@ export default function CityView({ initial }: { initial: CityData }) {
     setStep({ ...step, busy: true, error: undefined });
     const json =
       step.purpose === "claim"
-        ? await postJSON("/api/claim", { code: step.code, citySlug: slug, lotIndex: step.lot, buildingType: step.type })
+        ? await postJSON("/api/claim", { citySlug: slug, lotIndex: step.lot, buildingType: step.type })
         : await postJSON("/api/me/move", { citySlug: slug, lotIndex: step.lot, buildingType: step.type });
     await refresh();
     if (!json.ok) {
       if (json.error === "lot_taken") return setStep({ ...step, lot: null, busy: false, error: json.message });
       return setStep({ ...step, busy: false, error: json.message });
     }
-    setCodeInput("");
     setFocusLot(json.lotIndex);
     await refreshMe();
     setStep({ name: "done", handle: json.handle ?? me?.handle ?? "", isMayor: json.isMayor, moved: step.purpose === "move" });
@@ -328,11 +339,14 @@ export default function CityView({ initial }: { initial: CityData }) {
           <div className="actions">
             {!me && (
               <>
-                <button className="btn primary" onClick={() => { setInfo(null); setStep({ name: "code" }); }}>
-                  🏠 Resgatar casinha
+                <button className="btn primary" onClick={() => { setInfo(null); setStep({ name: "signup" }); }}>
+                  🏠 Morar aqui
                 </button>
-                <button className="btn small-link" onClick={() => setStep({ name: "login" })}>Já tenho casinha</button>
+                <button className="btn small-link" onClick={() => setStep({ name: "login" })}>Entrar</button>
               </>
+            )}
+            {homeless && (
+              <button className="btn primary" onClick={() => startClaim(me!.handle)}>🏠 Morar aqui</button>
             )}
             {livesHere && (
               <button className="btn primary" onClick={() => setStep({ name: "menu" })}>☰ @{me!.handle}</button>
@@ -384,7 +398,6 @@ export default function CityView({ initial }: { initial: CityData }) {
                 {buildingLabel(tappedHouse.type)}
                 {tappedHouse.handle === city.mayorHandle ? " · 🏛 Prefeito(a)" : ""}
               </p>
-              <a className="btn" href={`https://instagram.com/${tappedHouse.handle}`} target="_blank" rel="noreferrer">Ver no Instagram</a>
             </>
           )}
           {info.kind === "hall" && (
@@ -412,8 +425,8 @@ export default function CityView({ initial }: { initial: CityData }) {
               <h3>Lote disponível</h3>
               {!me && (
                 <>
-                  <p>Esse lote está livre. Tem um código? Resgate sua casinha!</p>
-                  <button className="btn primary" onClick={() => { setInfo(null); setStep({ name: "code" }); }}>Resgatar casinha</button>
+                  <p>Esse lote está livre. Crie sua conta e ganhe sua casinha aqui!</p>
+                  <button className="btn primary" onClick={() => { setInfo(null); setStep({ name: "signup" }); }}>🏠 Morar aqui</button>
                 </>
               )}
               {livesElsewhere && (
@@ -423,33 +436,34 @@ export default function CityView({ initial }: { initial: CityData }) {
                 </>
               )}
               {livesHere && <p>Esse lote está livre para um novo vizinho.</p>}
+              {homeless && (
+                <>
+                  <p>Esse lote está livre!</p>
+                  <button className="btn primary" onClick={() => startClaim(me!.handle)}>🏠 Morar aqui</button>
+                </>
+              )}
             </>
           )}
         </div>
       )}
 
-      {/* ---------- código de resgate */}
-      {step.name === "code" && (
-        <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
-          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submitCode}>
-            <h2>Resgatar casinha em {city.name}</h2>
-            <p>
-              Digite o código que você recebeu por DM{INSTAGRAM_PROFILE ? <> do <b>@{INSTAGRAM_PROFILE}</b></> : null}. Atenção: você vai
-              morar em <b>{city.name}</b>. Para trocar depois, só com o caminhão de mudança.
-            </p>
-            <input autoFocus value={codeInput} onChange={(e) => setCodeInput(e.target.value)} placeholder="NDC-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
-            <p className="muted">Ainda não tem código? Siga e mande <b>CASINHA</b> por DM para {INSTAGRAM_PROFILE ? <b>@{INSTAGRAM_PROFILE}</b> : "o perfil"}.</p>
-            {step.error && <p className="error">{step.error}</p>}
-            <div className="row">
-              <button type="button" className="btn" onClick={() => setStep({ name: "idle" })}>Cancelar</button>
-              <button className="btn primary" disabled={step.busy || codeInput.trim().length < 4}>{step.busy ? "Conferindo…" : "Continuar"}</button>
-            </div>
-          </form>
-        </div>
+      {/* ---------- criar conta */}
+      {step.name === "signup" && (
+        <SignupDialog
+          cityName={city.name}
+          onClose={() => setStep({ name: "idle" })}
+          onLogin={() => setStep({ name: "login" })}
+          onSuccess={async (handle) => {
+            await refreshMe();
+            startClaim(handle);
+          }}
+        />
       )}
 
       {/* ---------- entrar */}
-      {step.name === "login" && <LoginDialog onClose={() => setStep({ name: "idle" })} onSuccess={onLogin} />}
+      {step.name === "login" && (
+        <LoginDialog onClose={() => setStep({ name: "idle" })} onSuccess={onLogin} onSignup={() => setStep({ name: "signup" })} />
+      )}
 
       {/* ---------- criar senha */}
       {step.name === "password" && (
@@ -484,8 +498,12 @@ export default function CityView({ initial }: { initial: CityData }) {
       {step.name === "type" && (
         <div className="modal-bg">
           <div className="modal">
-            <h2>{step.purpose === "move" ? "🚚 Mudança" : `Olá, @${step.handle}! 👋`}</h2>
-            <p>{step.purpose === "move" ? `O que você quer construir em ${city.name}? Pode trocar o tipo!` : "O que você quer construir?"}</p>
+            <h2>{step.purpose === "move" ? "🚚 Mudança" : `Olá, ${step.handle}! 👋`}</h2>
+            <p>
+              {step.purpose === "move"
+                ? `O que você quer construir em ${city.name}? Pode trocar o tipo!`
+                : `O que você quer construir em ${city.name}? Atenção: para trocar de cidade depois, só com o caminhão de mudança.`}
+            </p>
             <div className="types">
               {BUILDING_TYPES.map((b) => (
                 <button key={b.id} className="btn type" onClick={() => setStep({ name: "lot", purpose: step.purpose, code: step.code, handle: step.handle, type: b.id, lot: null })}>
