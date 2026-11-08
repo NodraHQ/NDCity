@@ -272,6 +272,8 @@ export class CityScene {
     }
     for (const [idx, s] of this.signSprites) s.visible = !wanted.has(idx);
 
+    this.applyPopulation(next.houses.length);
+
     this.hallLabel.text = next.mayorHandle ? `🏛 @${next.mayorHandle}` : "🔒 Prefeitura livre";
 
     // modo de escolha de lote
@@ -309,12 +311,28 @@ export class CityScene {
     }
   }
 
+  /**
+   * Quanto mais casas, mais gente na rua: cidade vazia tem 2 carros e 3
+   * pessoas; cada casa nova traz mais movimento (até o limite da reserva).
+   */
+  private applyPopulation(houses: number) {
+    const cars = Math.min(2 + Math.ceil(houses * 0.6), 42);
+    const people = Math.min(3 + Math.ceil(houses * 1.2), 80);
+    let c = 0;
+    let p = 0;
+    for (const m of this.movers) {
+      if (m.path.kind === "car") m.sprite.visible = c++ < cars;
+      else m.sprite.visible = p++ < people;
+    }
+  }
+
   // ------------------------------------------------------------ animação
 
   private tick(dt: number) {
     if (this.destroyed) return;
     this.elapsed += dt;
     for (const m of this.movers) {
+      if (!m.sprite.visible) continue;
       m.t += (dt * m.path.speed) / m.length;
       const p = pointOnLoop(m.path.points, m.t);
       let t: Tex;
