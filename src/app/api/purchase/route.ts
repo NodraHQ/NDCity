@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     });
     await store.setPurchaseCheckout(purchase.id, checkoutId);
     await audit({ actor: r.handle, action: "compra_iniciada", handle: r.handle, details: { produto: product.label, valor: product.priceCents / 100 } });
-    return NextResponse.json({ ok: true, url });
+    return NextResponse.json({ ok: true, url, purchaseId: purchase.id });
   } catch (e) {
     console.error("checkout falhou", e);
     await store.setPurchaseStatus(purchase.id, "canceled");

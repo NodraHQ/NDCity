@@ -39,6 +39,7 @@ type Step =
   | { name: "chat" }
   | { name: "customize"; target: "house" | "hall"; style: Style; busy?: boolean; error?: string }
   | { name: "paywall"; product: ProductId; message?: string; busy?: boolean }
+  | { name: "paying"; product: ProductId; purchaseId: string; url: string }
   | { name: "proposal"; busy?: boolean; error?: string }
   | { name: "elections" }
   | { name: "notice"; title: string; text: string };
@@ -81,6 +82,7 @@ export default function CityView({ initial }: { initial: CityData }) {
   const [info, setInfo] = useState<Info>(null);
   const [focusLot, setFocusLot] = useState<number | null>(null);
   const wantsToMove = useRef(false);
+  const payWindow = useRef<Window | null>(null);
   const [pwInput, setPwInput] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [clock, setClock] = useState("");
@@ -288,10 +290,48 @@ export default function CityView({ initial }: { initial: CityData }) {
 
   async function buy(product: ProductId) {
     setStep({ name: "paywall", product, busy: true });
+    // abre a aba já no clique (senão o navegador bloqueia) e depois manda para o Mercado Pago
+    const w = window.open("", "_blank");
+    if (w) w.document.write("<p style='font-family:monospace;padding:24px'>Abrindo o Mercado Pago…</p>");
     const json = await postJSON("/api/purchase", { product, returnPath: `/c/${slug}` });
-    if (json.url) window.location.href = json.url;
-    else setStep({ name: "paywall", product, message: json.message });
+    if (!json.url) {
+      w?.close();
+      return setStep({ name: "paywall", product, message: json.message });
+    }
+    if (!w) {
+      window.location.href = json.url; // aba bloqueada: vai na mesma aba (volta pelo retorno do Mercado Pago)
+      return;
+    }
+    w.location.href = json.url;
+    payWindow.current = w;
+    setStep({ name: "paying", product, purchaseId: json.purchaseId, url: json.url });
   }
+
+  // enquanto espera o Pix, confere a cada 3 s; quando cai, fecha a aba do Mercado Pago
+  const payingId = step.name === "paying" ? step.purchaseId : null;
+  useEffect(() => {
+    if (!payingId) return;
+    const started = Date.now();
+    const id = setInterval(async () => {
+      if (Date.now() - started > 35 * 60_000) return clearInterval(id);
+      const r = await fetch(`/api/purchase/status?id=${payingId}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+      if (r?.status === "paid") {
+        clearInterval(id);
+        try {
+          payWindow.current?.close();
+        } catch {
+          /* o navegador pode não deixar fechar */
+        }
+        payWindow.current = null;
+        await refreshMe();
+        setStep({ name: "notice", title: "🎉 Pagamento aprovado!", text: "Obrigado! Já está liberado. Pode aproveitar 😄" });
+      } else if (r?.status === "canceled") {
+        clearInterval(id);
+        setStep({ name: "notice", title: "Pagamento não concluído", text: "Nada foi cobrado. Você pode tentar de novo quando quiser." });
+      }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [payingId, refreshMe]);
 
   const onLotTap = useCallback(
     (lotIndex: number, isOccupied: boolean) => {
@@ -700,6 +740,35 @@ export default function CityView({ initial }: { initial: CityData }) {
             <h2>{step.title}</h2>
             <p>{step.text}</p>
             <div className="row"><button className="btn primary" onClick={() => setStep({ name: "idle" })}>OK</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- aguardando o Pix */}
+      {step.name === "paying" && (
+        <div className="modal-bg">
+          <div className="modal">
+            <h2>⏳ Aguardando seu Pix…</h2>
+            <p>
+              Pague o Pix de <b>{formatPrice(PRODUCTS[step.product].priceCents)}</b> na aba do Mercado Pago que abriu. Assim que o pagamento cair,
+              esta tela atualiza sozinha e libera <b>{PRODUCTS[step.product].label}</b>.
+            </p>
+            <p className="muted">Pode fechar a aba do Mercado Pago depois de pagar e voltar aqui.</p>
+            <div className="row wrap">
+              <button
+                className="btn"
+                onClick={() => {
+                  payWindow.current?.close();
+                  payWindow.current = null;
+                  setStep({ name: "notice", title: "Tudo bem!", text: "Se você já pagou, o recurso é liberado sozinho em instantes." });
+                }}
+              >
+                Fechar
+              </button>
+              <button className="btn primary" onClick={() => { payWindow.current = window.open(step.url, "_blank"); }}>
+                Abrir o pagamento de novo
+              </button>
+            </div>
           </div>
         </div>
       )}

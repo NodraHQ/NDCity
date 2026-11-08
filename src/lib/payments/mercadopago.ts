@@ -74,6 +74,14 @@ export function getPayment(id: string) {
   return mp<MpPayment>(`/v1/payments/${encodeURIComponent(id)}`);
 }
 
+/** Pagamentos feitos para uma compra (pelo número da compra). */
+export async function searchPaymentsByReference(reference: string) {
+  const r = await mp<{ results: MpPayment[] }>(
+    `/v1/payments/search?external_reference=${encodeURIComponent(reference)}&sort=date_created&criteria=desc`,
+  );
+  return r.results ?? [];
+}
+
 /**
  * Confere a assinatura do aviso (cabeçalho x-signature: "ts=...,v1=...").
  * Sem MP_WEBHOOK_SECRET configurado, devolve "sem chave": mesmo assim o site
