@@ -19,6 +19,7 @@ import { PRESETS } from "@/lib/presets";
 import { hashString } from "@/lib/city/rng";
 
 const HousePreview = dynamic(() => import("./city/HousePreview"), { ssr: false });
+type PreviewRenderer = import("./city/HousePreview").PreviewRenderer;
 
 const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
   ssr: false,
@@ -92,6 +93,8 @@ export default function CityView({ initial }: { initial: CityData }) {
   const [proposal, setProposal] = useState<ProposalV | null>(null);
   const [civic, setCivic] = useState<Civic | null>(null);
   const zoomRef = useRef<((f: number) => void) | null>(null);
+  const previewRef = useRef<PreviewRenderer | null>(null);
+  const renderPreview = useCallback<PreviewRenderer>((o) => previewRef.current?.(o) ?? null, []);
   const { city } = data;
   const slug = city.slug;
   const lotCount = useMemo(() => generateCity(city.seed, city.layoutSize).lots.length, [city.seed, city.layoutSize]);
@@ -380,6 +383,7 @@ export default function CityView({ initial }: { initial: CityData }) {
         onCityHallTap={onCityHallTap}
         onEmptyTap={onEmptyTap}
         zoomRef={zoomRef}
+        previewRef={previewRef}
       />
 
       <header className="topbar">
@@ -649,6 +653,7 @@ export default function CityView({ initial }: { initial: CityData }) {
           <div className="customize-grid">
           <div className="c-preview preview-box">
             <HousePreview
+              render={renderPreview}
               hall={step.target === "hall"}
               type={myHouse?.type ?? "casa"}
               variant={me ? hashString(me.handle) % 5 : 0}

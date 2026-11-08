@@ -294,7 +294,7 @@ button.banner.vote { width: auto; left: 16px; right: 76px; margin: 0; max-width:
   .sheet.customize .swatch { width: 30px; height: 30px; }
 }
 /* tamanho da prévia: menor no celular, grande no computador (pixel art ampliada sem borrar) */
-.house-preview canvas { width: 170px !important; height: auto !important; }
+.house-preview canvas { width: 170px !important; height: auto !important; image-rendering: pixelated; }
 @media (min-width: 900px) {
   .sheet.customize .house-preview { width: 100%; display: flex; justify-content: center; }
   .sheet.customize .house-preview canvas { width: 100% !important; max-width: 380px; height: auto !important; }

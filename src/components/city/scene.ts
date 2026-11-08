@@ -518,6 +518,21 @@ export class CityScene {
     this.camera.y = Math.min(this.viewH - pad, Math.max(pad - h, this.camera.y));
   }
 
+  /**
+   * Desenha uma construção avulsa (para a prévia do painel de pintura) com
+   * este mesmo motor, e devolve como imagem comum. Usa o mesmo cache de
+   * texturas do mapa: nada é criado nem destruído fora daqui.
+   */
+  renderPreview(opts: { type: BuildingType; variant: number; style: Style | null; hall: boolean }) {
+    if (this.destroyed || !this.app?.renderer) return null;
+    const sk = styleKey(opts.style);
+    const t = opts.hall
+      ? this.tex(`cityhall:${sk}`, () => drawCityHall(opts.style))
+      : this.tex(`b:${opts.type}:${opts.variant}:${sk}`, () => drawBuilding(opts.type, opts.variant, opts.style));
+    const canvas = this.app.renderer.extract.canvas(t.texture) as HTMLCanvasElement;
+    return { canvas, width: t.texture.width, height: t.texture.height, oy: t.oy, tiles: opts.hall ? 2 : 1 };
+  }
+
   zoomBy(factor: number) {
     this.zoomAt(this.viewW / 2, this.viewH / 2, this.zoom * factor);
   }
