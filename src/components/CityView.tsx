@@ -13,6 +13,7 @@ import { darknessFor, localTime, sunElevation } from "@/lib/sun";
 import ChatPanel from "./ChatPanel";
 import ElectionCard, { type ElectionV, officeTitle } from "./ElectionCard";
 import FlagEditor from "./FlagEditor";
+import LoginDialog, { type LoginResult } from "./LoginDialog";
 import Tracker from "./Tracker";
 import { PRESETS } from "@/lib/presets";
 
@@ -29,8 +30,7 @@ type Me = { handle: string; citySlug: string | null; perks: Perks; hasPassword?:
 type Step =
   | { name: "idle" }
   | { name: "code"; error?: string; busy?: boolean }
-  | { name: "login"; error?: string; busy?: boolean }
-  | { name: "forgot" }
+  | { name: "login" }
   | { name: "password"; first?: boolean; redirect?: string; error?: string; busy?: boolean }
   | { name: "type"; purpose: "claim" | "move"; code: string; handle: string }
   | { name: "lot"; purpose: "claim" | "move"; code: string; handle: string; type: BuildingType | null; lot: number | null; error?: string; busy?: boolean }
@@ -81,7 +81,6 @@ export default function CityView({ initial }: { initial: CityData }) {
   const [info, setInfo] = useState<Info>(null);
   const [focusLot, setFocusLot] = useState<number | null>(null);
   const [codeInput, setCodeInput] = useState("");
-  const [handleInput, setHandleInput] = useState("");
   const [pwInput, setPwInput] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [clock, setClock] = useState("");
@@ -109,6 +108,13 @@ export default function CityView({ initial }: { initial: CityData }) {
     if (p) setProposal(p.proposal);
     if (c?.offices) setCivic(c);
   }, [slug]);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("senha") === "1") {
+      window.history.replaceState(null, "", window.location.pathname);
+      setStep({ name: "password", first: true });
+    }
+  }, []);
 
   useEffect(() => {
     refreshMe();
@@ -160,12 +166,7 @@ export default function CityView({ initial }: { initial: CityData }) {
     setStep({ name: "type", purpose: "claim", code: json.code, handle: json.handle });
   }
 
-  async function submitLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setStep({ name: "login", busy: true });
-    const json = await postJSON("/api/me/login", { handle: handleInput, secret: codeInput });
-    if (!json.ok) return setStep({ name: "login", error: json.message });
-    setCodeInput("");
+  async function onLogin(json: LoginResult) {
     await refreshMe();
     const redirect = json.citySlug && json.citySlug !== slug ? `/c/${json.citySlug}` : undefined;
     if (!json.hasPassword) return setStep({ name: "password", first: true, redirect });
@@ -448,53 +449,7 @@ export default function CityView({ initial }: { initial: CityData }) {
       )}
 
       {/* ---------- entrar */}
-      {step.name === "login" && (
-        <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
-          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submitLogin}>
-            <h2>Entrar</h2>
-            <p>Use seu @ do Instagram e sua senha. Ainda não criou senha? Use o código que recebeu por DM.</p>
-            <input autoFocus value={handleInput} onChange={(e) => setHandleInput(e.target.value)} placeholder="@seu.instagram" autoCapitalize="none" autoComplete="username" spellCheck={false} className="normal-case" />
-            <input
-              type={showPw ? "text" : "password"}
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value)}
-              placeholder="Senha ou código"
-              autoComplete="current-password"
-              spellCheck={false}
-              className="normal-case"
-            />
-            <label className="check"><input type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} /> mostrar</label>
-            {step.error && <p className="error">{step.error}</p>}
-            <div className="row between">
-              <button type="button" className="login-switch" onClick={() => setStep({ name: "forgot" })}>Esqueci minha senha</button>
-              <div className="row">
-                <button type="button" className="btn" onClick={() => setStep({ name: "idle" })}>Cancelar</button>
-                <button className="btn primary" disabled={step.busy || codeInput.trim().length < 4}>{step.busy ? "Entrando…" : "Entrar"}</button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* ---------- esqueci a senha */}
-      {step.name === "forgot" && (
-        <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>🔑 Esqueceu a senha?</h2>
-            <p>
-              Sem problema! Mande <b>ENTRAR</b> por DM para {INSTAGRAM_PROFILE ? <b>@{INSTAGRAM_PROFILE}</b> : "o perfil"} no Instagram. Você recebe na hora um <b>código de acesso</b>{" "}
-              (vale uma vez, por 24h).
-            </p>
-            <p>Depois volte aqui, toque em “Já tenho casinha” e entre com seu @ + o código. Aí é só criar uma senha nova.</p>
-            <div className="row wrap">
-              {INSTAGRAM_PROFILE && (
-                <a className="btn" href={`https://ig.me/m/${INSTAGRAM_PROFILE}`} target="_blank" rel="noreferrer">Abrir DM no Instagram</a>
-              )}
-              <button className="btn primary" onClick={() => setStep({ name: "login" })}>Já tenho o código</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {step.name === "login" && <LoginDialog onClose={() => setStep({ name: "idle" })} onSuccess={onLogin} />}
 
       {/* ---------- criar senha */}
       {step.name === "password" && (

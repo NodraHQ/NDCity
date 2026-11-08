@@ -27,7 +27,7 @@ const shade = (color: number, f: number) => {
 export class WorldScene {
   private app!: Application;
   private camera = new Container();
-  private nightLayer = new Graphics();
+  private nightLayer = new Sprite();
   private dotsAll = new Graphics();
   private markers = new Container();
   private labels = new Container();
@@ -124,22 +124,25 @@ export class WorldScene {
     canvas.height = H;
     const ctx = canvas.getContext("2d")!;
     const img = ctx.createImageData(W, H);
-    const put = (x: number, y: number, color: number) => {
+    const put = (x: number, y: number, color: number, alpha = 255) => {
       const i = (y * W + x) * 4;
       img.data[i] = (color >> 16) & 255;
       img.data[i + 1] = (color >> 8) & 255;
       img.data[i + 2] = color & 255;
-      img.data[i + 3] = 255;
+      img.data[i + 3] = alpha;
     };
     const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < W && y < H ? grid[y * W + x] : 0);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const v = grid[y * W + x];
         if (!v) {
-          // oceano, com água rasa perto da costa
-          let near = false;
-          for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2 && !near; dx++) if (at(x + dx, y + dy)) near = true;
-          put(x, y, near ? 0x3a78b8 : (x * 7 + y * 13) % 97 === 0 ? 0x3b6fae : 0x2a5d9c);
+          // oceano transparente (o fundo da tela é o mar, sem emenda), com
+          // água rasa clareando aos poucos perto da costa
+          let dist = 99;
+          for (let dy = -4; dy <= 4; dy++)
+            for (let dx = -4; dx <= 4; dx++) if (at(x + dx, y + dy)) dist = Math.min(dist, Math.max(Math.abs(dx), Math.abs(dy)));
+          const alpha = [0, 235, 170, 110, 55][dist] ?? 0;
+          if (alpha) put(x, y, 0x3a78b8, alpha);
           continue;
         }
         const st = states[v - 1];
@@ -158,20 +161,40 @@ export class WorldScene {
     return new Sprite(tex);
   }
 
-  /** Noite de verdade: escurece onde o sol já se pôs. */
+  /**
+   * Noite de verdade: escurece onde o sol já se pôs. Cobre muito além do
+   * mapa (para não aparecer "borda") e é desenhada em baixa resolução com
+   * suavização, virando um degradê contínuo.
+   */
   private drawNight() {
-    const g = this.nightLayer;
-    g.clear();
+    const step = 12;
+    const margin = 1200;
+    const cols = Math.ceil((this.W + margin * 2) / step);
+    const rows = Math.ceil((this.H + margin * 2) / step);
+    const canvas = document.createElement("canvas");
+    canvas.width = cols;
+    canvas.height = rows;
+    const ctx = canvas.getContext("2d")!;
+    const img = ctx.createImageData(cols, rows);
     const now = new Date();
-    const step = 6;
-    for (let y = 0; y < this.H; y += step) {
-      for (let x = 0; x < this.W; x += step) {
-        const lng = mapData.lngMin + (x + step / 2) * mapData.cell;
-        const lat = mapData.latMax - (y + step / 2) * mapData.cell;
+    for (let j = 0; j < rows; j++) {
+      const lat = Math.max(-89, Math.min(89, mapData.latMax - (j * step - margin + step / 2) * mapData.cell));
+      for (let i = 0; i < cols; i++) {
+        const lng = mapData.lngMin + (i * step - margin + step / 2) * mapData.cell;
         const d = darknessFor(sunElevation(lat, lng, now));
-        if (d > 0) g.rect(x, y, step, step).fill({ color: 0x0a1030, alpha: d * 0.5 });
+        const k = (j * cols + i) * 4;
+        img.data[k] = 10;
+        img.data[k + 1] = 16;
+        img.data[k + 2] = 48;
+        img.data[k + 3] = Math.round(d * 0.5 * 255);
       }
     }
+    ctx.putImageData(img, 0, 0);
+    const old = this.nightLayer.texture;
+    this.nightLayer.texture = Texture.from({ resource: canvas, scaleMode: "linear" });
+    if (old && old !== Texture.EMPTY) old.destroy(true);
+    this.nightLayer.scale.set(step);
+    this.nightLayer.position.set(-margin, -margin);
   }
 
   private buildDots() {

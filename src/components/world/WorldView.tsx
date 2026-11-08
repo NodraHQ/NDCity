@@ -7,6 +7,7 @@ import { SITE_NAME } from "@/config/site";
 import { findCity, searchCities } from "@/lib/geo/cities";
 import { localTime } from "@/lib/sun";
 import ElectionCard, { type ElectionV, officeTitle } from "../ElectionCard";
+import LoginDialog, { type LoginResult } from "../LoginDialog";
 import Tracker from "../Tracker";
 import type { ActiveInfo } from "./scene";
 
@@ -27,6 +28,11 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
   const [offices, setOffices] = useState<{ president: string | null; governors: Record<string, string> } | null>(null);
   const [elections, setElections] = useState<ElectionV[]>([]);
   const [showElections, setShowElections] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+
+  function onLogin(r: LoginResult) {
+    window.location.href = `/c/${r.citySlug}${r.hasPassword ? "" : "?senha=1"}`;
+  }
 
   useEffect(() => {
     fetch("/api/me")
@@ -117,6 +123,11 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
           ))}
         </div>
       )}
+
+      {!me && !selected && !showElections && (
+        <button className="btn my-city" onClick={() => setShowLogin(true)}>🔑 Entrar</button>
+      )}
+      {showLogin && <LoginDialog onClose={() => setShowLogin(false)} onSuccess={onLogin} />}
 
       {myCity && !selected && !showElections && (
         <Link className="btn primary my-city" href={`/c/${myCity.slug}`}>
