@@ -269,3 +269,33 @@ button.banner.vote { width: auto; left: 16px; right: 76px; margin: 0; max-width:
   background: repeating-conic-gradient(#e9f3dc 0% 25%, #f4f9ec 0% 50%) 50% / 20px 20px; border: 2px solid var(--border); padding: 6px; }
 .house-preview canvas { display: block; image-rendering: pixelated; }
 .tab-body { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- pintar: celular empilhado; computador dividido em 2 colunas */
+.customize-grid { display: grid; grid-template-areas: "preview" "options" "actions"; gap: 8px; }
+.c-preview { grid-area: preview; }
+.c-options { grid-area: options; }
+.c-actions { grid-area: actions; }
+@media (min-width: 900px) {
+  .sheet.customize {
+    max-width: 1080px; width: calc(100% - 160px); top: 90px; bottom: 16px; max-height: none;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sheet.customize .customize-grid {
+    flex: 1; min-height: 0; gap: 16px;
+    grid-template-columns: minmax(300px, 400px) 1fr;
+    grid-template-rows: 1fr auto;
+    grid-template-areas: "preview options" "actions options";
+  }
+  .sheet.customize .c-preview { justify-content: center; margin: 0; }
+  .sheet.customize .c-preview canvas { width: 100% !important; max-width: 380px; height: auto !important; }
+  .sheet.customize .c-options { overflow-y: auto; padding-right: 10px; min-height: 0; }
+  .sheet.customize .c-actions .row { justify-content: stretch; }
+  .sheet.customize .c-actions .btn { flex: 1; }
+  .sheet.customize .swatch { width: 30px; height: 30px; }
+}
+/* tamanho da prévia: menor no celular, grande no computador (pixel art ampliada sem borrar) */
+.house-preview canvas { width: 170px !important; height: auto !important; }
+@media (min-width: 900px) {
+  .sheet.customize .house-preview { width: 100%; display: flex; justify-content: center; }
+  .sheet.customize .house-preview canvas { width: 100% !important; max-width: 380px; height: auto !important; }
+}

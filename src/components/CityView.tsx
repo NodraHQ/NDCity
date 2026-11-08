@@ -643,10 +643,11 @@ export default function CityView({ initial }: { initial: CityData }) {
 
       {/* ---------- personalizar */}
       {step.name === "customize" && (
-        <div className="sheet tall">
+        <div className="sheet tall customize">
           <h3>{step.target === "hall" ? "🏛 Proposta para a prefeitura" : "🎨 Pintar minha casa"}</h3>
           {step.target === "hall" && <p className="muted">Você escolhe; os moradores votam sim ou não (24h). Mais da metade decide.</p>}
-          <div className="preview-box">
+          <div className="customize-grid">
+          <div className="c-preview preview-box">
             <HousePreview
               hall={step.target === "hall"}
               type={myHouse?.type ?? "casa"}
@@ -655,6 +656,7 @@ export default function CityView({ initial }: { initial: CityData }) {
             />
             <span className="muted">Prévia: muda na hora conforme você escolhe</span>
           </div>
+          <div className="c-options">
           <div className="palette-row">
             <span>Modelos prontos</span>
             <div className="presets">
@@ -694,12 +696,16 @@ export default function CityView({ initial }: { initial: CityData }) {
             <span>Bandeira</span>
             <FlagEditor value={step.style.flag} defaultUf={city.uf} onChange={(flag) => setStep({ ...step, style: { ...step.style, flag } })} />
           </div>
-          {step.error && <p className="error">{step.error}</p>}
-          <div className="row">
-            <button className="btn" onClick={() => setStep({ name: "idle" })} disabled={step.busy}>Cancelar</button>
-            <button className="btn primary" onClick={saveStyle} disabled={step.busy}>
-              {step.busy ? "Enviando…" : step.target === "hall" ? "Propor aos moradores" : "Salvar"}
-            </button>
+          </div>
+          <div className="c-actions">
+            {step.error && <p className="error">{step.error}</p>}
+            <div className="row">
+              <button className="btn" onClick={() => setStep({ name: "idle" })} disabled={step.busy}>Cancelar</button>
+              <button className="btn primary" onClick={saveStyle} disabled={step.busy}>
+                {step.busy ? "Enviando…" : step.target === "hall" ? "Propor aos moradores" : "Salvar"}
+              </button>
+            </div>
+          </div>
           </div>
         </div>
       )}
