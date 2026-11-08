@@ -88,8 +88,18 @@ export const memoryStore: Store = {
     const d = data();
     d.codes = d.codes.filter((c) => c.code !== code || c.usedAt);
   },
-  async deleteClaim(id) {
+  async removeHouse(handle) {
     const d = data();
-    d.claims = d.claims.filter((c) => c.id !== id);
+    const claim = d.claims.find((c) => c.instagramHandle === handle);
+    d.claims = d.claims.filter((c) => c.instagramHandle !== handle);
+    d.codes = d.codes.filter((c) => c.instagramHandle !== handle);
+    for (const city of d.cities) {
+      if (city.mayorHandle && !d.claims.some((c) => c.cityId === city.id && c.instagramHandle === city.mayorHandle)) {
+        const next = d.claims.filter((c) => c.cityId === city.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+        city.mayorHandle = next?.instagramHandle ?? null;
+        city.unlockedAt = next ? city.unlockedAt : null;
+      }
+    }
+    return { hadHouse: !!claim };
   },
 };

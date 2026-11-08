@@ -66,10 +66,9 @@ function roadLines(rng: ReturnType<typeof createRng>, start: number, end: number
   return lines;
 }
 
-export function generateCity(seed: string): CityLayout {
+export function generateCity(seed: string, inner = 22): CityLayout {
   const rng = createRng(`${seed}#v${LAYOUT_VERSION}`);
   const margin = 3;
-  const inner = 22;
   const width = inner + margin * 2;
   const height = inner + margin * 2;
 
@@ -200,7 +199,9 @@ export function generateCity(seed: string): CityLayout {
   // Volta grande ao redor da cidade.
   paths.push({ kind: "car", points: loopAround(rMin, rMax, cMin, cMax, 0.7, false), speed: 2.2, offset: 0, variant: 0 });
   paths.push({ kind: "car", points: loopAround(rMin, rMax, cMin, cMax, 0.7, false), speed: 2.2, offset: 0.5, variant: 1 });
-  const carCount = Math.min(10, Math.max(4, Math.floor(blocks.length * 0.6)));
+  // Reserva grande de carros e pessoas; o mapa mostra mais conforme a
+  // cidade ganha moradores (ver "population" na cena).
+  const carCount = 40;
   for (let i = 0; i < carCount; i++) {
     const b = rng.pick(roadBlocks);
     paths.push({
@@ -211,7 +212,7 @@ export function generateCity(seed: string): CityLayout {
       variant: rng.int(0, 4),
     });
   }
-  const peopleCount = Math.min(18, blocks.length + 4);
+  const peopleCount = 80;
   for (let i = 0; i < peopleCount; i++) {
     const b = rng.pick(roadBlocks);
     paths.push({

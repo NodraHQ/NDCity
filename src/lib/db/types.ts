@@ -57,5 +57,6 @@ export interface Store {
   createCode(code: string, handle: string): Promise<Code>;
   listCodes(limit?: number): Promise<Code[]>;
   deleteCode(code: string): Promise<void>;
-  deleteClaim(id: string): Promise<void>;
+  /** Remove a casa e TODO o acesso do @ (códigos, logins) e passa a prefeitura adiante. */
+  removeHouse(handle: string): Promise<{ hadHouse: boolean }>;
 }

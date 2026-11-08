@@ -46,11 +46,14 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
 
   async function removeHouse(e: React.FormEvent) {
     e.preventDefault();
-    if (!confirm(`Remover a casinha de @${removeHandle.replace(/^@/, "")}? Isso não tem volta.`)) return;
+    if (!confirm(`Remover a casinha de @${removeHandle.replace(/^@/, "")}? A pessoa perde todo o acesso e isso não tem volta.`)) return;
     const res = await fetch(`/api/admin/claims?handle=${encodeURIComponent(removeHandle)}`, { method: "DELETE" });
     const json = await res.json();
-    setMsg(json.ok ? { text: "Casinha removida." } : { text: json.message, error: true });
-    if (json.ok) setRemoveHandle("");
+    setMsg(json.ok ? { text: json.message } : { text: json.message, error: true });
+    if (json.ok) {
+      setRemoveHandle("");
+      load();
+    }
   }
 
   async function logout() {
@@ -118,7 +121,7 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
 
       <form className="card" onSubmit={removeHouse}>
         <h2>Remover casinha</h2>
-        <p>Para casos de abuso. A pessoa perde a casinha e o lote volta a ficar livre.</p>
+        <p>Para casos de abuso. A pessoa perde a casinha, os códigos e o login. Se era prefeita, a prefeitura passa para o morador mais antigo (ou fica vaga).</p>
         <div className="row">
           <input value={removeHandle} onChange={(e) => setRemoveHandle(e.target.value)} placeholder="@fulano" autoCapitalize="none" />
           <button className="btn danger" disabled={!removeHandle.trim()}>Remover</button>

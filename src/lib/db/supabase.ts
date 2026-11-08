@@ -93,7 +93,8 @@ export const supabaseStore: Store = {
   async deleteCode(code) {
     check(await db().from("codes").delete().eq("code", code).is("used_at", null));
   },
-  async deleteClaim(id) {
-    check(await db().from("claims").delete().eq("id", id));
+  async removeHouse(handle) {
+    const res = check(await db().rpc("remove_house", { p_handle: handle })) as { had_house?: boolean };
+    return { hadHouse: !!res.had_house };
   },
 };
