@@ -40,7 +40,10 @@ export default function SignupDialog({
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h2>🏠 Criar conta</h2>
+        <div className="auth-tabs">
+          <button type="button" onClick={onLogin}>Entrar</button>
+          <button type="button" className="on">Criar conta</button>
+        </div>
         <p>
           Escolha um nome de usuário e uma senha.{" "}
           {cityName ? <>Depois é só escolher seu lote em <b>{cityName}</b>.</> : "Depois é só escolher sua cidade no mapa."}
@@ -77,8 +80,7 @@ export default function SignupDialog({
           <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} /> mostrar senha
         </label>
         {error && <p className="error">{error}</p>}
-        <div className="row between">
-          <button type="button" className="login-switch" onClick={onLogin}>Já tenho conta</button>
+        <div className="row">
           <div className="row">
             <button type="button" className="btn" onClick={onClose}>Cancelar</button>
             <button className="btn primary" disabled={busy || handle.length < 3 || password.length < 6 || !password2}>

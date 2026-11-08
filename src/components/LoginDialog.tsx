@@ -43,7 +43,10 @@ export default function LoginDialog({
     <div className="modal-bg" onClick={onClose}>
       {view === "login" ? (
         <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-          <h2>Entrar</h2>
+          <div className="auth-tabs">
+            <button type="button" className="on">Entrar</button>
+            <button type="button" onClick={onSignup} disabled={!onSignup}>Criar conta</button>
+          </div>
           <p>Entre com seu nome de usuário e sua senha.</p>
           <input
             autoFocus
@@ -71,7 +74,6 @@ export default function LoginDialog({
           <div className="row between">
             <span className="row left">
               <button type="button" className="login-switch" onClick={() => setView("forgot")}>Esqueci minha senha</button>
-              {onSignup && <button type="button" className="login-switch" onClick={onSignup}>Criar conta</button>}
             </span>
             <div className="row">
               <button type="button" className="btn" onClick={onClose}>Cancelar</button>

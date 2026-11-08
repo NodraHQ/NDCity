@@ -340,9 +340,13 @@ export default function CityView({ initial }: { initial: CityData }) {
         return;
       }
       if (step.name !== "idle") return;
+      if (isOccupied && myHouse && myHouse.lotIndex === lotIndex) {
+        setInfo(null);
+        return setStep({ name: "menu" });
+      }
       setInfo(isOccupied ? { kind: "house", lotIndex } : { kind: "free" });
     },
-    [step],
+    [step, myHouse],
   );
   const onCityHallTap = useCallback(() => {
     if (step.name === "idle") setInfo({ kind: "hall" });
@@ -394,9 +398,8 @@ export default function CityView({ initial }: { initial: CityData }) {
             {!me && (
               <>
                 <button className="btn primary" onClick={() => { setInfo(null); setStep({ name: "signup" }); }}>
-                  🏠 Morar aqui
+                  👤 Entrar ou criar conta
                 </button>
-                <button className="btn small-link" onClick={() => setStep({ name: "login" })}>Entrar</button>
               </>
             )}
             {homeless && (
@@ -625,7 +628,7 @@ export default function CityView({ initial }: { initial: CityData }) {
             {myElections.length > 0 && <button className="btn" onClick={() => setStep({ name: "elections" })}>🗳 Eleições ({myElections.length})</button>}
             {proposal && <button className="btn" onClick={() => setStep({ name: "proposal" })}>📜 Votação da prefeitura</button>}
             <Link className="btn" href="/">🚚 Mudar de cidade{me.perks.moveCredits ? ` (${me.perks.moveCredits})` : " 🔒"}</Link>
-            <button className="btn" onClick={() => setStep({ name: "password" })}>🔒 {me.hasPassword ? "Trocar senha" : "Criar senha"}</button>
+            <button className="btn" onClick={() => setStep({ name: "password" })}>🔑 {me.hasPassword ? "Trocar senha" : "Criar senha"}</button>
             <button className="btn" onClick={logout}>Sair</button>
           </div>
           {me.perks.chatUntil && <p className="muted">Chat liberado até {new Date(me.perks.chatUntil).toLocaleDateString("pt-BR")}.</p>}

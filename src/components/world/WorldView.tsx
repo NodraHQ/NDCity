@@ -145,8 +145,7 @@ export default function WorldView({ initialActive }: { initialActive: ActiveInfo
 
       {!me && !selected && !showElections && (
         <div className="home-actions">
-          <button className="btn primary" onClick={() => { setPendingCity(null); setShowSignup(true); }}>🏠 Criar conta</button>
-          <button className="btn" onClick={() => setShowLogin(true)}>🔑 Entrar</button>
+          <button className="btn primary" onClick={() => { setPendingCity(null); setShowSignup(true); }}>👤 Entrar ou criar conta</button>
         </div>
       )}
       {me && !me.citySlug && !selected && !showElections && (
