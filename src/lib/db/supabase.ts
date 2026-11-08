@@ -415,6 +415,29 @@ export const supabaseStore: Store = {
       lastPath: r.last_path,
     }));
   },
+  async getPasswordHash(handle) {
+    const r = check(await db().from("accounts").select("password_hash").eq("handle", handle).maybeSingle()) as {
+      password_hash: string;
+    } | null;
+    return r?.password_hash ?? null;
+  },
+  async setPasswordHash(handle, hash) {
+    check(await db().from("accounts").upsert({ handle, password_hash: hash, updated_at: new Date().toISOString() }));
+  },
+  async createLoginCode(code, handle, expiresAt, source) {
+    check(await db().from("login_codes").insert({ code, handle, expires_at: expiresAt, source }));
+  },
+  async consumeLoginCode(code, handle) {
+    let q = db()
+      .from("login_codes")
+      .update({ used_at: new Date().toISOString() })
+      .eq("code", code)
+      .is("used_at", null)
+      .gt("expires_at", new Date().toISOString());
+    if (handle) q = q.eq("handle", handle);
+    const rows = check(await q.select("handle")) as { handle: string }[];
+    return rows[0]?.handle ?? null;
+  },
   async addPurchase(p) {
     check(
       await db().from("purchases").insert({

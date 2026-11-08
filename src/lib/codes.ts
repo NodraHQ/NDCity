@@ -22,3 +22,18 @@ export function normalizeCode(raw: string): string {
   if (body.length !== 8) return raw.trim().toUpperCase();
   return `NDC-${body.slice(0, 4)}-${body.slice(4)}`;
 }
+
+/** Código de acesso (para quem esqueceu a senha): "ENT-XXXX-XXXX". */
+export function generateLoginCode(): string {
+  const part = () => Array.from({ length: 4 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
+  return `ENT-${part()}-${part()}`;
+}
+
+/** Normaliza código de acesso digitado de qualquer jeito (ou null se não for um). */
+export function normalizeLoginCode(raw: string): string | null {
+  const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!clean.startsWith("ENT") || clean.length !== 11) return null;
+  return `ENT-${clean.slice(3, 7)}-${clean.slice(7)}`;
+}
+
+export const LOGIN_CODE_HOURS = 24;

@@ -205,6 +205,15 @@ export interface Store {
   // acessos
   trackVisit(visitorId: string, handle: string | null, path: string, view: boolean): Promise<void>;
   listVisits(sinceDay: string): Promise<VisitRow[]>;
+  // senha e códigos de acesso
+  getPasswordHash(handle: string): Promise<string | null>;
+  setPasswordHash(handle: string, hash: string): Promise<void>;
+  createLoginCode(code: string, handle: string, expiresAt: string, source: string): Promise<void>;
+  /**
+   * Usa o código (uma vez só). Devolve o @ ou null se não existe, já foi usado,
+   * expirou ou (se `handle` vier) é de outro @, e nesse caso o código não é gasto.
+   */
+  consumeLoginCode(code: string, handle?: string): Promise<string | null>;
   // pagamentos
   addPurchase(p: Omit<Purchase, "id" | "createdAt">): Promise<void>;
   listPurchases(): Promise<Purchase[]>;

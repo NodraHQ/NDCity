@@ -24,12 +24,14 @@ const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
 type Perks = { chatUntil: string | null; customize: boolean; moveCredits: number };
 type ProposalV = { id: string; proposer: string; style: Style; endsAt: string; yes: number; no: number; residents: number; myVote: boolean | null; canVote: boolean };
 type Civic = { offices: { president: string | null; governors: Record<string, string> }; elections: ElectionV[] };
-type Me = { handle: string; citySlug: string | null; perks: Perks } | null;
+type Me = { handle: string; citySlug: string | null; perks: Perks; hasPassword?: boolean } | null;
 
 type Step =
   | { name: "idle" }
   | { name: "code"; error?: string; busy?: boolean }
   | { name: "login"; error?: string; busy?: boolean }
+  | { name: "forgot" }
+  | { name: "password"; first?: boolean; redirect?: string; error?: string; busy?: boolean }
   | { name: "type"; purpose: "claim" | "move"; code: string; handle: string }
   | { name: "lot"; purpose: "claim" | "move"; code: string; handle: string; type: BuildingType | null; lot: number | null; error?: string; busy?: boolean }
   | { name: "done"; handle: string; isMayor: boolean; moved?: boolean }
@@ -79,6 +81,9 @@ export default function CityView({ initial }: { initial: CityData }) {
   const [info, setInfo] = useState<Info>(null);
   const [focusLot, setFocusLot] = useState<number | null>(null);
   const [codeInput, setCodeInput] = useState("");
+  const [handleInput, setHandleInput] = useState("");
+  const [pwInput, setPwInput] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [clock, setClock] = useState("");
   const [proposal, setProposal] = useState<ProposalV | null>(null);
   const [civic, setCivic] = useState<Civic | null>(null);
@@ -158,12 +163,30 @@ export default function CityView({ initial }: { initial: CityData }) {
   async function submitLogin(e: React.FormEvent) {
     e.preventDefault();
     setStep({ name: "login", busy: true });
-    const json = await postJSON("/api/me/login", { code: codeInput });
+    const json = await postJSON("/api/me/login", { handle: handleInput, secret: codeInput });
     if (!json.ok) return setStep({ name: "login", error: json.message });
     setCodeInput("");
     await refreshMe();
+    const redirect = json.citySlug && json.citySlug !== slug ? `/c/${json.citySlug}` : undefined;
+    if (!json.hasPassword) return setStep({ name: "password", first: true, redirect });
     setStep({ name: "idle" });
-    if (json.citySlug && json.citySlug !== slug) window.location.href = `/c/${json.citySlug}`;
+    if (redirect) window.location.href = redirect;
+  }
+
+  function afterPassword(redirect?: string) {
+    setPwInput("");
+    setStep({ name: "idle" });
+    if (redirect) window.location.href = redirect;
+  }
+
+  async function savePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (step.name !== "password") return;
+    setStep({ ...step, busy: true, error: undefined });
+    const json = await postJSON("/api/me/password", { password: pwInput });
+    if (!json.ok) return setStep({ ...step, busy: false, error: json.message });
+    await refreshMe();
+    afterPassword(step.redirect);
   }
 
   async function logout() {
@@ -414,6 +437,7 @@ export default function CityView({ initial }: { initial: CityData }) {
               morar em <b>{city.name}</b>. Para trocar depois, só com o caminhão de mudança.
             </p>
             <input autoFocus value={codeInput} onChange={(e) => setCodeInput(e.target.value)} placeholder="NDC-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+            <p className="muted">Ainda não tem código? Siga e mande <b>CASINHA</b> por DM para {INSTAGRAM_PROFILE ? <b>@{INSTAGRAM_PROFILE}</b> : "o perfil"}.</p>
             {step.error && <p className="error">{step.error}</p>}
             <div className="row">
               <button type="button" className="btn" onClick={() => setStep({ name: "idle" })}>Cancelar</button>
@@ -428,12 +452,74 @@ export default function CityView({ initial }: { initial: CityData }) {
         <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submitLogin}>
             <h2>Entrar</h2>
-            <p>Digite o mesmo código que você usou para resgatar sua casinha.</p>
-            <input autoFocus value={codeInput} onChange={(e) => setCodeInput(e.target.value)} placeholder="NDC-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+            <p>Use seu @ do Instagram e sua senha. Ainda não criou senha? Use o código que recebeu por DM.</p>
+            <input autoFocus value={handleInput} onChange={(e) => setHandleInput(e.target.value)} placeholder="@seu.instagram" autoCapitalize="none" autoComplete="username" spellCheck={false} className="normal-case" />
+            <input
+              type={showPw ? "text" : "password"}
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value)}
+              placeholder="Senha ou código"
+              autoComplete="current-password"
+              spellCheck={false}
+              className="normal-case"
+            />
+            <label className="check"><input type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} /> mostrar</label>
+            {step.error && <p className="error">{step.error}</p>}
+            <div className="row between">
+              <button type="button" className="login-switch" onClick={() => setStep({ name: "forgot" })}>Esqueci minha senha</button>
+              <div className="row">
+                <button type="button" className="btn" onClick={() => setStep({ name: "idle" })}>Cancelar</button>
+                <button className="btn primary" disabled={step.busy || codeInput.trim().length < 4}>{step.busy ? "Entrando…" : "Entrar"}</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ---------- esqueci a senha */}
+      {step.name === "forgot" && (
+        <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>🔑 Esqueceu a senha?</h2>
+            <p>
+              Sem problema! Mande <b>ENTRAR</b> por DM para {INSTAGRAM_PROFILE ? <b>@{INSTAGRAM_PROFILE}</b> : "o perfil"} no Instagram. Você recebe na hora um <b>código de acesso</b>{" "}
+              (vale uma vez, por 24h).
+            </p>
+            <p>Depois volte aqui, toque em “Já tenho casinha” e entre com seu @ + o código. Aí é só criar uma senha nova.</p>
+            <div className="row wrap">
+              {INSTAGRAM_PROFILE && (
+                <a className="btn" href={`https://ig.me/m/${INSTAGRAM_PROFILE}`} target="_blank" rel="noreferrer">Abrir DM no Instagram</a>
+              )}
+              <button className="btn primary" onClick={() => setStep({ name: "login" })}>Já tenho o código</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- criar senha */}
+      {step.name === "password" && (
+        <div className="modal-bg">
+          <form className="modal" onSubmit={savePassword}>
+            <h2>🔒 {step.first ? "Crie sua senha" : me?.hasPassword ? "Trocar senha" : "Criar senha"}</h2>
+            <p>
+              Com ela você entra em qualquer celular usando seu <b>@ + senha</b>, sem precisar de código. Se esquecer, é só pedir um código
+              novo por DM.
+            </p>
+            <input type="text" value={`@${me?.handle ?? ""}`} readOnly autoComplete="username" className="normal-case" hidden />
+            <input
+              autoFocus
+              type={showPw ? "text" : "password"}
+              value={pwInput}
+              onChange={(e) => setPwInput(e.target.value)}
+              placeholder="Nova senha (mínimo 6)"
+              autoComplete="new-password"
+              className="normal-case"
+            />
+            <label className="check"><input type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} /> mostrar</label>
             {step.error && <p className="error">{step.error}</p>}
             <div className="row">
-              <button type="button" className="btn" onClick={() => setStep({ name: "idle" })}>Cancelar</button>
-              <button className="btn primary" disabled={step.busy || codeInput.trim().length < 4}>{step.busy ? "Entrando…" : "Entrar"}</button>
+              <button type="button" className="btn" onClick={() => afterPassword(step.redirect)}>{step.first ? "Agora não" : "Cancelar"}</button>
+              <button className="btn primary" disabled={step.busy || pwInput.length < 6}>{step.busy ? "Salvando…" : "Salvar senha"}</button>
             </div>
           </form>
         </div>
@@ -491,7 +577,9 @@ export default function CityView({ initial }: { initial: CityData }) {
               </>
             )}
             <div className="row">
-              <button className="btn primary" onClick={() => setStep({ name: "idle" })}>Ver minha casinha</button>
+              <button className="btn primary" onClick={() => setStep(me && !me.hasPassword ? { name: "password", first: true } : { name: "idle" })}>
+                Ver minha casinha
+              </button>
             </div>
           </div>
         </div>
@@ -510,6 +598,7 @@ export default function CityView({ initial }: { initial: CityData }) {
             {myElections.length > 0 && <button className="btn" onClick={() => setStep({ name: "elections" })}>🗳 Eleições ({myElections.length})</button>}
             {proposal && <button className="btn" onClick={() => setStep({ name: "proposal" })}>📜 Votação da prefeitura</button>}
             <Link className="btn" href="/">🚚 Mudar de cidade{me.perks.moveCredits ? ` (${me.perks.moveCredits})` : " 🔒"}</Link>
+            <button className="btn" onClick={() => setStep({ name: "password" })}>🔒 {me.hasPassword ? "Trocar senha" : "Criar senha"}</button>
             <button className="btn" onClick={logout}>Sair</button>
           </div>
           {me.perks.chatUntil && <p className="muted">Chat liberado até {new Date(me.perks.chatUntil).toLocaleDateString("pt-BR")}.</p>}

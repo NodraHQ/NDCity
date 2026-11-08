@@ -39,6 +39,8 @@ type Data = {
   proposals: HallProposal[];
   hallVotes: { proposalId: string; handle: string; approve: boolean }[];
   logs: LogEntry[];
+  accounts: Map<string, string>;
+  loginCodes: { code: string; handle: string; expiresAt: string; usedAt: string | null }[];
   visits: VisitRow[];
   purchases: Purchase[];
 };
@@ -61,6 +63,8 @@ function data(): Data {
     proposals: [],
     hallVotes: [],
     logs: [],
+    accounts: new Map(),
+    loginCodes: [],
     visits: [],
     purchases: [],
   };
@@ -215,6 +219,8 @@ export const memoryStore: Store = {
     d.claims = d.claims.filter((c) => c.instagramHandle !== handle);
     d.codes = d.codes.filter((c) => c.instagramHandle !== handle);
     for (const [k, v] of d.sessions) if (v === handle) d.sessions.delete(k);
+    d.accounts.delete(handle);
+    d.loginCodes = d.loginCodes.filter((c) => c.handle !== handle);
     const openE = new Set(d.elections.filter((e) => e.status === "open").map((e) => e.id));
     d.candidates = d.candidates.filter((c) => !(openE.has(c.electionId) && c.handle === handle));
     d.votes = d.votes.filter((v) => !(openE.has(v.electionId) && (v.voter === handle || v.candidate === handle)));
@@ -398,6 +404,23 @@ export const memoryStore: Store = {
   },
   async listVisits(sinceDay) {
     return data().visits.filter((v) => v.day >= sinceDay);
+  },
+  async getPasswordHash(handle) {
+    return data().accounts.get(handle) ?? null;
+  },
+  async setPasswordHash(handle, hash) {
+    data().accounts.set(handle, hash);
+  },
+  async createLoginCode(code, handle, expiresAt) {
+    data().loginCodes.push({ code, handle, expiresAt, usedAt: null });
+  },
+  async consumeLoginCode(code, handle) {
+    const c = data().loginCodes.find(
+      (x) => x.code === code && !x.usedAt && Date.parse(x.expiresAt) > Date.now() && (!handle || x.handle === handle),
+    );
+    if (!c) return null;
+    c.usedAt = now();
+    return c.handle;
   },
   async addPurchase(p) {
     data().purchases.unshift({ ...p, id: randomUUID(), createdAt: now() });

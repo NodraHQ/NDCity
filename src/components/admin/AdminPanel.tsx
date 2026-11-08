@@ -6,7 +6,7 @@ import type { Code, HouseRow, LogEntry, OfficeHolder } from "@/lib/db/types";
 import { STATE_FLAG_UFS } from "@/lib/flags";
 import { type ProductId, PRODUCTS, formatPrice } from "@/lib/payments/products";
 
-type Tab = "acessos" | "historico" | "codigos" | "casas" | "ocupacao" | "eleicoes" | "recursos";
+type Tab = "acessos" | "historico" | "codigos" | "casas" | "ocupacao" | "eleicoes" | "recursos" | "integracao";
 type CityStat = { slug: string; name: string; uf: string | null; houses: number; lots: number; pct: number; mayor: string | null };
 type StateStat = { uf: string; municipios: number; occupied: number; houses: number; pct: number; governor: string | null };
 type Overview = { houses: HouseRow[]; cities: CityStat[]; states: StateStat[]; president: string | null };
@@ -58,6 +58,7 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
     ["codigos", "🎟 Códigos"],
     ["eleicoes", "🗳 Eleições"],
     ["recursos", "✨ Recursos pagos"],
+    ["integracao", "🤖 Integração"],
   ];
 
   return (
@@ -92,6 +93,7 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
       {tab === "codigos" && <CodesTab />}
       {tab === "eleicoes" && <ElectionsTab />}
       {tab === "recursos" && <PerksTab />}
+      {tab === "integracao" && <IntegrationTab />}
     </main>
   );
 }
@@ -113,6 +115,13 @@ function HousesTab({ overview, reload }: { overview: Overview | null; reload: ()
   const shown = houses.filter(
     (h) => (!uf || (h.uf ?? "—") === uf) && (!city || h.citySlug === city) && (!q || h.handle.includes(q.toLowerCase().replace(/^@/, ""))),
   );
+
+  const [issued, setIssued] = useState<Issued | null>(null);
+  async function accessCode(h: HouseRow) {
+    const j = await api("/api/admin/access-code", "POST", { handle: h.handle });
+    if (j.ok) setIssued(j);
+    else setMsg(j.message);
+  }
 
   async function remove(h: HouseRow) {
     const extra = h.isMayor ? "\nEssa pessoa é PREFEITA: a prefeitura passa para o morador mais antigo." : "";
@@ -137,6 +146,7 @@ function HousesTab({ overview, reload }: { overview: Overview | null; reload: ()
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar @" autoCapitalize="none" />
       </div>
       {msg && <p className="ok">{msg}</p>}
+      {issued && <IssuedCode issued={issued} onClose={() => setIssued(null)} />}
       <div className="table-wrap">
         <table>
           <thead>
@@ -153,7 +163,10 @@ function HousesTab({ overview, reload }: { overview: Overview | null; reload: ()
                 <td>{h.uf ?? "—"}</td>
                 <td>{buildingLabel(h.type)}</td>
                 <td>{new Date(h.createdAt).toLocaleDateString("pt-BR")}</td>
-                <td><button className="btn tiny danger" aria-label={`Remover @${h.handle}`} onClick={() => remove(h)}>✕</button></td>
+                <td className="actions-cell">
+                  <button className="btn tiny" title="Gerar código de acesso" aria-label={`Código de acesso para @${h.handle}`} onClick={() => accessCode(h)}>🔑</button>
+                  <button className="btn tiny danger" aria-label={`Remover @${h.handle}`} onClick={() => remove(h)}>✕</button>
+                </td>
               </tr>
             ))}
             {!shown.length && <tr><td colSpan={6}>{overview ? "Nenhuma casa com esses filtros." : "Carregando…"}</td></tr>}
@@ -236,7 +249,7 @@ function CodesTab() {
   const [handle, setHandle] = useState("");
   const [codes, setCodes] = useState<Code[]>([]);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
-  const [last, setLast] = useState<Code | null>(null);
+  const [last, setLast] = useState<Issued | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -251,10 +264,10 @@ function CodesTab() {
     e.preventDefault();
     setBusy(true);
     setMsg(null);
-    const j = await api("/api/admin/codes", "POST", { handle });
+    const j = await api("/api/admin/access-code", "POST", { handle });
     setBusy(false);
     if (!j.ok) return setMsg({ text: j.message, error: true });
-    setLast(j.code);
+    setLast(j);
     setHandle("");
     load();
   }
@@ -265,28 +278,20 @@ function CodesTab() {
     load();
   }
 
-  const dmText = (c: Code) => `Seu código do NDCity: ${c.code}\nResgate sua casinha em ${window.location.origin}`;
-
   return (
     <>
       <form className="card" onSubmit={generate}>
         <h2>Gerar código</h2>
-        <p>Digite o @ do Instagram da pessoa. O código só vai funcionar para esse @.</p>
+        <p>
+          Digite o @ do Instagram da pessoa. Se ela ainda não tem casa, sai um código de <b>resgate</b> (NDC-…). Se já tem, sai um
+          código de <b>acesso</b> (ENT-…) para entrar de novo: vale uma vez só, por 24h.
+        </p>
         <div className="row">
           <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@fulano" autoCapitalize="none" autoComplete="off" />
           <button className="btn primary" disabled={busy || !handle.trim()}>Gerar</button>
         </div>
         {msg && <p className={msg.error ? "error" : "ok"}>{msg.text}</p>}
-        {last && (
-          <div className="new-code">
-            <p>Código para <b>@{last.instagramHandle}</b>:</p>
-            <div className="code">{last.code}</div>
-            <div className="row wrap">
-              <button type="button" className="btn" onClick={() => navigator.clipboard.writeText(last.code)}>Copiar código</button>
-              <button type="button" className="btn" onClick={() => navigator.clipboard.writeText(dmText(last))}>Copiar mensagem pra DM</button>
-            </div>
-          </div>
-        )}
+        {last && <IssuedCode issued={last} />}
       </form>
       <div className="card">
         <h2>Códigos ({codes.length})</h2>
@@ -603,6 +608,9 @@ const LOG_LABELS: Record<string, string> = {
   desistiu: "↩ desistiu da candidatura",
   votou: "🗳 votou",
   admin_entrou: "🔐 admin entrou",
+  codigo_acesso: "🔑 código de acesso gerado",
+  senha_criada: "🔒 criou senha",
+  senha_trocada: "🔒 trocou a senha",
 };
 
 function describe(l: LogEntry): string {
@@ -689,6 +697,94 @@ function LogsTab() {
         </table>
       </div>
       {more && logs.length > 0 && <button className="btn" onClick={() => load(logs[logs.length - 1].id)}>Carregar mais</button>}
+    </div>
+  );
+}
+
+// ------------------------------------------------------- código emitido
+
+type Issued = { handle: string; kind: "acesso" | "resgate"; code: string; expiresAt: string | null; message: string };
+
+function IssuedCode({ issued, onClose }: { issued: Issued; onClose?: () => void }) {
+  const [copied, setCopied] = useState("");
+  const copy = (t: string, what: string) => {
+    navigator.clipboard.writeText(t);
+    setCopied(what);
+  };
+  return (
+    <div className="new-code">
+      <div className="row between">
+        <p>
+          {issued.kind === "acesso" ? "🔑 Código de acesso" : "🎟 Código de resgate"} para <b>@{issued.handle}</b>
+          {issued.expiresAt ? ` · vale até ${fmtDate(issued.expiresAt)}, uma vez só` : ""}
+        </p>
+        {onClose && <button className="btn tiny" onClick={onClose}>✕</button>}
+      </div>
+      <div className="code">{issued.code}</div>
+      <div className="row wrap left">
+        <button type="button" className="btn" onClick={() => copy(issued.code, "código")}>Copiar código</button>
+        <button type="button" className="btn" onClick={() => copy(issued.message, "mensagem")}>Copiar mensagem pra DM</button>
+        {copied && <span className="ok">✓ {copied} copiado</span>}
+      </div>
+      {issued.kind === "acesso" && <p className="muted">Confira se quem pediu na DM é mesmo o @{issued.handle} antes de mandar.</p>}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ integração
+
+function IntegrationTab() {
+  const [info, setInfo] = useState<{ configured: boolean; site: string; endpoint: string; key: string | null } | null>(null);
+  const [show, setShow] = useState(false);
+  const [test, setTest] = useState("");
+  const [result, setResult] = useState("");
+  useEffect(() => {
+    api("/api/admin/integration").then((j) => j.ok && setInfo(j));
+  }, []);
+  if (!info) return <div className="card">Carregando…</div>;
+  const getUrl = `${info.endpoint}?handle={{username}}&key=${show ? info.key : "SUA_CHAVE"}&format=text`;
+
+  async function runTest() {
+    if (!info?.key) return;
+    const r = await fetch(`${info.endpoint}?handle=${encodeURIComponent(test)}&key=${encodeURIComponent(info.key)}&format=text`);
+    setResult(await r.text());
+  }
+
+  return (
+    <div className="card">
+      <h2>🤖 Ferramenta de DM (bot)</h2>
+      <p>
+        Qualquer ferramenta de DM que consiga <b>chamar um link</b> (ManyChat, Make, n8n, ReplyKaro se tiver essa opção…) pode
+        mandar um código diferente para cada pessoa: ela chama o endereço abaixo com o @ de quem escreveu e cola a resposta na DM.
+        Quem não tem casa recebe o código de resgate; quem já tem recebe um código de acesso (uso único, 24h).
+      </p>
+      {!info.configured && <p className="error">A chave do bot (BOT_SECRET) não está configurada na Vercel.</p>}
+      <p><b>Jeito mais simples (GET, resposta em texto pronto):</b></p>
+      <div className="code small">{getUrl}</div>
+      <p className="muted">
+        Troque <code>{"{{username}}"}</code> pela variável de @ da sua ferramenta. Ligue a opção “só para seguidores” na
+        ferramenta, para só quem segue receber código.
+      </p>
+      <p><b>Ou POST com JSON</b> (resposta com <code>code</code> e <code>message</code>):</p>
+      <div className="code small">
+        POST {info.endpoint}
+        <br />
+        Authorization: Bearer {show ? info.key : "SUA_CHAVE"}
+        <br />
+        {'{ "handle": "fulano" }'}
+      </div>
+      <div className="row left wrap">
+        <button className="btn" onClick={() => setShow((v) => !v)}>{show ? "Esconder chave" : "Mostrar chave"}</button>
+        {info.key && <button className="btn" onClick={() => navigator.clipboard.writeText(info.key!)}>Copiar chave</button>}
+      </div>
+      <p className="error">⚠️ A chave é como uma senha: só cole dentro da ferramenta de DM, nunca em post, story ou mensagem.</p>
+      <h2>Testar</h2>
+      <div className="row">
+        <input value={test} onChange={(e) => setTest(e.target.value)} placeholder="@fulano" autoCapitalize="none" />
+        <button className="btn primary" disabled={!test.trim() || !info.key} onClick={runTest}>Testar</button>
+      </div>
+      {result && <pre className="code small">{result}</pre>}
+      <p className="muted">O teste gera um código de verdade para esse @.</p>
     </div>
   );
 }

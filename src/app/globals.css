@@ -248,3 +248,10 @@ table.logs td:first-child { white-space: nowrap; }
 .types { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
 .btn.type { padding: 8px 4px; font-size: 12px; gap: 2px; }
 .btn.type .emoji { font-size: 22px; }
+
+.code.small { font-size: 12px; letter-spacing: 0; word-break: break-all; background: #fff; border: 2px dashed var(--border); padding: 8px; white-space: pre-wrap; font-weight: normal; margin: 4px 0 8px; }
+.actions-cell { display: flex; gap: 6px; }
+.login-switch { background: none; border: none; color: var(--ink); text-decoration: underline; cursor: pointer; font-family: var(--font); font-size: 13px; padding: 0; }
+
+.modal input.normal-case { text-transform: none; letter-spacing: 0; }
+.modal .row.between { justify-content: space-between; flex-wrap: wrap; }
