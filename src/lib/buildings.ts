@@ -5,6 +5,18 @@ export const BUILDING_TYPES = [
   { id: "oficina", label: "Oficina", emoji: "🔧" },
   { id: "padaria", label: "Padaria", emoji: "🥖" },
   { id: "cabare", label: "Cabaré", emoji: "💃" },
+  { id: "mansao", label: "Mansão", emoji: "🏰" },
+  { id: "igreja", label: "Igreja", emoji: "⛪" },
+  { id: "escola", label: "Escola", emoji: "🏫" },
+  { id: "mercado", label: "Mercado", emoji: "🛒" },
+  { id: "boteco", label: "Boteco", emoji: "🍺" },
+  { id: "lanchonete", label: "Lanchonete", emoji: "🍔" },
+  { id: "academia", label: "Academia", emoji: "🏋️" },
+  { id: "farmacia", label: "Farmácia", emoji: "💊" },
+  { id: "hotel", label: "Hotel", emoji: "🏨" },
+  { id: "barbearia", label: "Barbearia", emoji: "💈" },
+  { id: "sorveteria", label: "Sorveteria", emoji: "🍦" },
+  { id: "posto", label: "Posto", emoji: "⛽" },
 ] as const;
 
 export type BuildingType = (typeof BUILDING_TYPES)[number]["id"];

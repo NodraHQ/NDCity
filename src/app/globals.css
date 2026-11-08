@@ -244,3 +244,7 @@ button.banner { font-family: var(--font); font-size: 13px; color: var(--accent-i
 .check input { width: auto; }
 table.logs td { white-space: normal; vertical-align: top; }
 table.logs td:first-child { white-space: nowrap; }
+.modal { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.types { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.btn.type { padding: 8px 4px; font-size: 12px; gap: 2px; }
+.btn.type .emoji { font-size: 22px; }

@@ -169,6 +169,18 @@ const WALLS = {
   oficina: [0x8b9bb0, 0xa59a8a, 0x8ea89a, 0x9a9aa8, 0xb0a28a],
   padaria: [0xf5d9a0, 0xf7e7c5, 0xf3caa0, 0xeedab0, 0xfae4b5],
   cabare: [0x6b2e7a, 0x8a1f4f, 0x3b2a6b, 0x7a2550, 0x502a7a],
+  mansao: [0xffffff, 0xf1e3c6, 0xe8d8c8, 0xd9e4ee, 0xf4e0e6],
+  igreja: [0xffffff, 0xf2efe6, 0xf6e9c9, 0xe9eef2, 0xf4e4d4],
+  escola: [0xf6e27f, 0xf4c7a1, 0xd9f0c4, 0xbfe0f2, 0xf1e3c6],
+  mercado: [0xe9eef2, 0xf1e3c6, 0xd9f0c4, 0xf6e9c9, 0xdfe4ea],
+  boteco: [0xf6e27f, 0xffffff, 0xd9f0c4, 0xf4c7a1, 0xbfe0f2],
+  lanchonete: [0xd8392b, 0xf0a020, 0xf6e27f, 0x3f6fa8, 0x2e9e4a],
+  academia: [0x3b3f4a, 0x2f4a6b, 0x5a5f6b, 0x4a3a5a, 0x2f5a4a],
+  farmacia: [0xffffff, 0xe9f5ee, 0xf2f2f2, 0xeaf2fa, 0xf6f6ea],
+  hotel: [0xc8b8a6, 0xd2c6d8, 0xa8c4b0, 0xf1e3c6, 0xb7bcc4],
+  barbearia: [0xf1e3c6, 0x9fb4c8, 0xd9f0c4, 0xf4c7a1, 0xffffff],
+  sorveteria: [0xf4c7d8, 0xbfe0f2, 0xd9f0c4, 0xf6e27f, 0xd2c6d8],
+  posto: [0xffffff, 0xf2f2f2, 0xe9eef2, 0xf6f6ea, 0xeaf2fa],
 };
 const ROOFS = [0xc0483a, 0x8a4b32, 0x3f6fa8, 0x5a7d3a, 0x9c3a60];
 
@@ -199,7 +211,7 @@ export function drawBuilding(type: BuildingType, variant: number, style?: Style 
   const d = drawBuildingBody(type, variant, style);
   if (style?.flag) {
     const iso = d.iso;
-    houseFlag(iso, style.flag, Math.min(iso.head - 2, type === "predio" ? 22 : 18));
+    houseFlag(iso, style.flag, Math.min(iso.head - 2, type === "predio" || type === "hotel" ? 22 : 18));
   }
   return finish(d.iso);
 }
@@ -283,6 +295,192 @@ function drawBuildingBody(type: BuildingType, variant: number, style?: Style | n
       iso.px([0.43, 0.5, 25], 0xffe14f, 3, 3);
       // luzinhas no chão
       for (const u of [0.2, 0.32, 0.68, 0.8]) iso.px([b + 0.05, u, 1], 0xffe14f);
+      return { iso };
+    }
+    case "mansao": {
+      const iso = new Iso(new Graphics(), 1, 30);
+      const [a, b] = [0.08, 0.92];
+      iso.box(a, a, b, b, 0, 16, wall);
+      for (const z of [3, 10]) {
+        for (const u of [0.14, 0.3, 0.68, 0.82]) iso.leftRect(b, u, u + 0.08, z, z + 4, WINDOW);
+        for (const u of [0.2, 0.4, 0.6]) iso.rightRect(b, u, u + 0.1, z, z + 4, WINDOW);
+      }
+      iso.box(b - 0.02, 0.4, b + 0.08, 0.6, 0, 1, 0xd8d2c0); // degrau
+      for (const u of [0.4, 0.47, 0.54]) iso.leftRect(b + 0.06, u, u + 0.03, 1, 14, 0xffffff); // colunas
+      iso.leftRect(b, 0.44, 0.56, 0, 7, accent(0x6a4628)); // porta
+      iso.gableRoof(a - 0.04, a - 0.04, b + 0.04, b + 0.04, 16, 8, style?.roof ? roof : 0x5a4a6a);
+      return { iso };
+    }
+    case "igreja": {
+      const iso = new Iso(new Graphics(), 1, 38);
+      iso.box(0.2, 0.3, 0.82, 0.86, 0, 12, wall); // nave
+      iso.rightRect(0.86, 0.35, 0.45, 4, 9, 0x6fa8dc); // vitral
+      iso.rightRect(0.86, 0.58, 0.68, 4, 9, 0xe8b830);
+      iso.gableRoof(0.17, 0.27, 0.85, 0.89, 12, 8, style?.roof ? roof : 0xc0483a);
+      iso.box(0.6, 0.1, 0.86, 0.34, 0, 26, wall); // torre
+      iso.leftRect(0.86, 0.16, 0.28, 0, 7, 0x6a4628); // porta
+      iso.leftRect(0.86, 0.18, 0.26, 17, 22, 0x2f2f3a); // sino
+      iso.px([0.86, 0.22, 20], 0xe8b830, 2, 2);
+      iso.poly([[0.6, 0.1, 26], [0.6, 0.34, 26], [0.73, 0.22, 33]], shade(roof, 0.8));
+      iso.poly([[0.86, 0.1, 26], [0.86, 0.34, 26], [0.73, 0.22, 33]], style?.roof ? roof : 0xc0483a);
+      const [cx, cy] = iso.pt([0.73, 0.22, 33]);
+      iso.g.rect(cx, cy - 5, 1, 5).fill(accent(0xe8b830)); // cruz
+      iso.g.rect(cx - 1, cy - 4, 3, 1).fill(accent(0xe8b830));
+      return { iso };
+    }
+    case "escola": {
+      const iso = new Iso(new Graphics(), 1, 22);
+      const [a, b] = [0.1, 0.9];
+      iso.box(a, a, b, b, 0, 12, wall, style?.roof ? roof : 0xb04a3a);
+      iso.leftRect(b, a, b, 0, 2, shade(wall, 0.75)); // rodapé
+      for (const u of [0.16, 0.3, 0.64, 0.78]) iso.leftRect(b, u, u + 0.09, 5, 9, WINDOW);
+      for (const u of [0.18, 0.34, 0.5, 0.66]) iso.rightRect(b, u, u + 0.1, 5, 9, WINDOW);
+      iso.leftRect(b, 0.44, 0.56, 0, 7, 0x3a6fa8); // porta
+      iso.box(0.4, 0.42, 0.6, 0.58, 12, 17, wall, style?.roof ? roof : 0xb04a3a); // frontão
+      iso.px([0.6, 0.5, 15], accent(0xffffff), 2, 2); // relógio
+      return { iso };
+    }
+    case "mercado": {
+      const iso = new Iso(new Graphics(), 1, 20);
+      const [a, b] = [0.08, 0.92];
+      iso.box(a, a, b, b, 0, 11, wall, 0x9aa0aa);
+      iso.leftRect(b, 0.14, 0.86, 1, 7, 0xa8dcf0); // vidro
+      for (const u of [0.32, 0.5, 0.68]) iso.leftRect(b, u, u + 0.02, 1, 7, 0x6a7a8a);
+      iso.leftRect(b, 0.44, 0.56, 0, 7, 0x6a7a8a);
+      iso.leftRect(b, a, b, 8, 11, accent(style?.roof ? roof : 0x2e9e4a)); // faixa
+      iso.rightRect(b, 0.3, 0.7, 3, 7, WINDOW);
+      iso.box(0.4, 0.25, 0.48, 0.75, 11, 16, accent(0xd8392b)); // letreiro
+      iso.leftRect(0.48, 0.32, 0.68, 12, 15, 0xffffff);
+      return { iso };
+    }
+    case "boteco": {
+      const iso = new Iso(new Graphics(), 1, 18);
+      const [a, b] = [0.22, 0.82];
+      iso.box(a, a, b, b, 0, 9, wall);
+      for (let u = a; u < b - 0.01; u += 0.06) iso.leftRect(b, u, u + 0.03, 0, 3, 0x3f6fa8); // azulejo
+      iso.leftRect(b, 0.32, 0.5, 0, 7, 0x4a3a2a); // porta de enrolar
+      iso.rightRect(b, 0.35, 0.6, 3, 7, WINDOW);
+      iso.poly([[b, a, 8], [b, b, 8], [b + 0.1, b, 6], [b + 0.1, a, 6]], accent(0xd8392b)); // toldo
+      iso.box(a, a, b, b, 9, 10, style?.roof ? roof : 0x8a4b32);
+      iso.box(0.88, 0.58, 0.96, 0.66, 0, 3, 0xd8392b); // mesinha
+      iso.px([0.92, 0.62, 5], 0xffd400, 1, 2); // cerveja
+      return { iso };
+    }
+    case "lanchonete": {
+      const iso = new Iso(new Graphics(), 1, 26);
+      const [a, b] = [0.14, 0.86];
+      iso.box(a, a, b, b, 0, 10, wall, style?.roof ? roof : 0xf0f0f0);
+      iso.leftRect(b, 0.18, 0.82, 2, 7, 0xa8dcf0);
+      iso.leftRect(b, 0.4, 0.54, 0, 7, 0xd8d8d8);
+      iso.leftRect(b, a, b, 8, 10, 0xffffff);
+      // hambúrguer no telhado
+      const [x, y] = iso.pt([0.5, 0.5, 11]);
+      const g = iso.g;
+      g.rect(x - 1, y - 1, 1, 2).fill(0x55555a);
+      g.rect(x - 5, y - 4, 10, 2).fill(0xd8a050);
+      g.rect(x - 5, y - 6, 10, 2).fill(0x5a3a22);
+      g.rect(x - 5, y - 7, 10, 1).fill(accent(0x5fd04a));
+      g.rect(x - 4, y - 10, 8, 3).fill(0xe8b060);
+      g.rect(x - 2, y - 9, 1, 1).fill(0xffffff);
+      g.rect(x + 1, y - 10, 1, 1).fill(0xffffff);
+      return { iso };
+    }
+    case "academia": {
+      const iso = new Iso(new Graphics(), 1, 22);
+      const [a, b] = [0.1, 0.9];
+      iso.box(a, a, b, b, 0, 12, wall, style?.roof ? roof : 0x2a2a33);
+      iso.leftRect(b, 0.16, 0.84, 3, 9, 0x8fd0f0);
+      iso.leftRect(b, 0.44, 0.56, 0, 9, 0x5a6a7a);
+      iso.rightRect(b, a, b, 10, 12, accent(0xffd400)); // faixa
+      iso.leftRect(b, a, b, 10, 12, accent(0xffd400));
+      // halter no telhado
+      const [x, y] = iso.pt([0.5, 0.5, 12]);
+      iso.g.rect(x - 5, y - 4, 10, 1).fill(0xc8c8c8);
+      iso.g.rect(x - 6, y - 6, 2, 5).fill(0x1f1d2b);
+      iso.g.rect(x + 4, y - 6, 2, 5).fill(0x1f1d2b);
+      return { iso };
+    }
+    case "farmacia": {
+      const iso = new Iso(new Graphics(), 1, 22);
+      const [a, b] = [0.14, 0.86];
+      iso.box(a, a, b, b, 0, 10, wall);
+      iso.leftRect(b, 0.18, 0.82, 2, 7, 0xbfe8d8);
+      iso.leftRect(b, 0.42, 0.56, 0, 7, 0xd8e8e0);
+      iso.leftRect(b, a, b, 8, 10, accent(0x2e9e4a));
+      iso.box(a, a, b, b, 10, 11, style?.roof ? roof : 0xd8d8d8);
+      // cruz verde
+      const [x, y] = iso.pt([0.5, 0.5, 11]);
+      const c = accent(0x2e9e4a);
+      iso.g.rect(x - 1, y - 2, 1, 2).fill(0x55555a);
+      iso.g.rect(x - 2, y - 10, 4, 8).fill(c);
+      iso.g.rect(x - 4, y - 8, 8, 4).fill(c);
+      iso.g.rect(x - 1, y - 9, 2, 6).fill(0xffffff);
+      iso.g.rect(x - 3, y - 7, 6, 2).fill(0xffffff);
+      return { iso };
+    }
+    case "hotel": {
+      const iso = new Iso(new Graphics(), 1, 42);
+      const [a, b] = [0.12, 0.88];
+      const h = 30;
+      iso.box(a, a, b, b, 0, h, wall, style?.roof ? roof : shade(wall, 0.8));
+      for (let z = 8; z < h - 2; z += 5) {
+        for (const u of [0.2, 0.36, 0.52, 0.68]) {
+          const lit = (z * 3 + u * 50 + v) % 4 < 1;
+          iso.leftRect(b, u, u + 0.1, z, z + 3, lit ? WINDOW_LIT : WINDOW);
+          iso.rightRect(b, u, u + 0.1, z, z + 3, lit ? WINDOW_LIT : WINDOW);
+        }
+      }
+      iso.poly([[b, 0.3, 6], [b, 0.7, 6], [b + 0.12, 0.7, 5], [b + 0.12, 0.3, 5]], accent(0xd8392b)); // marquise
+      iso.leftRect(b, 0.4, 0.6, 0, 5, 0xa8dcf0);
+      // placa "H" no topo
+      iso.box(0.45, 0.4, 0.5, 0.6, h, h + 7, accent(0xd8392b));
+      const [x, y] = iso.pt([0.5, 0.5, h + 6]);
+      iso.g.rect(x - 2, y, 1, 4).fill(0xffffff);
+      iso.g.rect(x + 1, y, 1, 4).fill(0xffffff);
+      iso.g.rect(x - 2, y + 2, 4, 1).fill(0xffffff);
+      return { iso };
+    }
+    case "barbearia": {
+      const iso = new Iso(new Graphics(), 1, 18);
+      const [a, b] = [0.22, 0.82];
+      iso.box(a, a, b, b, 0, 9, wall);
+      iso.leftRect(b, 0.28, 0.42, 0, 7, 0x4a3a2a);
+      iso.leftRect(b, 0.5, 0.76, 3, 7, 0xa8dcf0);
+      iso.gableRoof(a - 0.03, a - 0.03, b + 0.03, b + 0.03, 9, 5, style?.roof ? roof : 0x2f4a6b);
+      // poste listrado
+      const [x, y] = iso.pt([b + 0.08, 0.86, 0]);
+      for (let i = 0; i < 9; i++) iso.g.rect(x, y - 2 - i, 2, 1).fill([0xd8392b, 0xffffff, accent(0x3f6fa8)][i % 3]);
+      iso.g.rect(x, y - 12, 2, 1).fill(0xc8c8c8);
+      return { iso };
+    }
+    case "sorveteria": {
+      const iso = new Iso(new Graphics(), 1, 24);
+      const [a, b] = [0.18, 0.82];
+      iso.box(a, a, b, b, 0, 9, wall);
+      iso.leftRect(b, 0.24, 0.4, 0, 7, 0xffffff);
+      iso.leftRect(b, 0.48, 0.76, 2, 7, 0xa8dcf0);
+      for (let i = 0; i < 5; i++) {
+        const u = 0.2 + i * 0.12;
+        iso.poly([[b, u, 9], [b, u + 0.12, 9], [b + 0.12, u + 0.12, 7], [b + 0.12, u, 7]], i % 2 ? 0xffffff : accent(0xff7ab0));
+      }
+      iso.box(a, a, b, b, 9, 10, style?.roof ? roof : 0xffffff);
+      // casquinha no telhado
+      const [x, y] = iso.pt([0.5, 0.5, 10]);
+      iso.g.poly([x - 3, y - 6, x + 3, y - 6, x, y]).fill(0xd8a050);
+      iso.g.circle(x, y - 8, 3).fill(accent(0xff7ab0));
+      iso.g.circle(x, y - 11, 2).fill(0xfff1d0);
+      return { iso };
+    }
+    case "posto": {
+      const iso = new Iso(new Graphics(), 1, 18);
+      iso.box(0.12, 0.62, 0.42, 0.9, 0, 8, wall); // lojinha
+      iso.leftRect(0.42, 0.66, 0.86, 1, 6, 0xa8dcf0);
+      for (const [r, c] of [[0.3, 0.12], [0.3, 0.48], [0.88, 0.12], [0.88, 0.48]]) iso.box(r - 0.03, c, r, c + 0.03, 0, 10, 0xd8d8d8); // pilares
+      iso.box(0.2, 0.06, 0.92, 0.56, 10, 12, accent(0xd8392b), style?.roof ? roof : 0xffffff); // cobertura
+      for (const c of [0.2, 0.36]) {
+        iso.box(0.56, c, 0.66, c + 0.08, 0, 5, accent(0xd8392b)); // bombas
+        iso.px([0.66, c + 0.03, 4], 0xffffff);
+      }
       return { iso };
     }
   }

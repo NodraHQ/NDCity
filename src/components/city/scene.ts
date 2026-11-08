@@ -42,7 +42,26 @@ export type SceneCallbacks = {
 type Tex = { texture: Texture; ox: number; oy: number };
 
 /** Altura aproximada (px) de cada construção, para posicionar o @. */
-const LABEL_HEIGHT: Record<BuildingType, number> = { casa: 19, predio: 44, oficina: 19, padaria: 22, cabare: 27 };
+const LABEL_HEIGHT: Record<BuildingType, number> = {
+  casa: 19,
+  predio: 44,
+  oficina: 19,
+  padaria: 22,
+  cabare: 27,
+  mansao: 26,
+  igreja: 36,
+  escola: 21,
+  mercado: 20,
+  boteco: 16,
+  lanchonete: 25,
+  academia: 21,
+  farmacia: 21,
+  hotel: 38,
+  barbearia: 16,
+  sorveteria: 22,
+  posto: 16,
+};
+const TALL: BuildingType[] = ["predio", "hotel", "igreja"];
 const LABEL_MIN_ZOOM = 2.6;
 
 type Mover = { sprite: Sprite; path: CityLayout["paths"][number]; length: number; t: number; tex: [Tex, Tex] | Tex };
@@ -329,7 +348,7 @@ export class CityScene {
       this.objects.addChild(sprite);
       const label = this.makeLabel(`@${h.handle}`);
       this.labels.addChild(label);
-      const glow = this.glowAt("warm", lot.row + 0.5, lot.col + 0.5, Math.round(LABEL_HEIGHT[h.type] / 2.5), h.type === "predio" ? 12 : 9);
+      const glow = this.glowAt("warm", lot.row + 0.5, lot.col + 0.5, Math.round(LABEL_HEIGHT[h.type] / 2.5), TALL.includes(h.type) ? 12 : 9);
       this.houseSprites.set(h.lotIndex, { sprite, label, house: h, glow });
     }
     for (const [idx, s] of this.signSprites) s.visible = !wanted.has(idx);
