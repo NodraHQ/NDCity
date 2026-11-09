@@ -35,11 +35,13 @@ export async function applyPayment(payment: MpPayment, knownPurchase?: Purchase 
   }
   if ((payment.status === "refunded" || payment.status === "charged_back") && purchase.status === "paid") {
     await store.setPurchaseStatus(purchase.id, "refunded");
+    // tira o que a compra tinha dado: dias de chat ou o crédito (se ainda não foi usado)
+    await store.revokeEntitlement(purchase.handle, product.feature, { days: product.days, credits: product.credits });
     await audit({
       actor: "sistema",
       action: "estorno",
       handle: purchase.handle,
-      details: { produto: product.label, valor: purchase.amountCents / 100, mercadopago: String(payment.id) },
+      details: { produto: product.label, valor: purchase.amountCents / 100, mercadopago: String(payment.id), contestacao: payment.status === "charged_back" },
     });
     return "estornado";
   }

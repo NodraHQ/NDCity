@@ -29,7 +29,7 @@ async function mp<T>(path: string, init?: RequestInit): Promise<T> {
   return json as T;
 }
 
-/** Cria a tela de pagamento. Só Pix (e saldo do Mercado Pago), pagamento à vista, expira em 30 min. */
+/** Cria a tela de pagamento: Pix ou cartão, à vista (cobrança única, não recorrente), expira em 30 min. */
 export async function createCheckout(opts: {
   purchaseId: string;
   title: string;
@@ -50,7 +50,8 @@ export async function createCheckout(opts: {
       ...(opts.siteUrl.startsWith("https://") ? { auto_return: "approved" } : {}),
       statement_descriptor: "NDCITY",
       payment_methods: {
-        excluded_payment_types: [{ id: "credit_card" }, { id: "debit_card" }, { id: "ticket" }, { id: "prepaid_card" }, { id: "atm" }],
+        // Pix e cartão (crédito/débito), à vista. Boleto fica de fora (demora dias).
+        excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
         installments: 1,
       },
       expires: true,

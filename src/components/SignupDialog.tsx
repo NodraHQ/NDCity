@@ -79,6 +79,9 @@ export default function SignupDialog({
         <label className="check">
           <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} /> mostrar senha
         </label>
+        <p className="muted">
+          Ao criar a conta você concorda com os <a href="/termos" target="_blank">Termos e a Privacidade</a>.
+        </p>
         {error && <p className="error">{error}</p>}
         <div className="row">
           <div className="row">

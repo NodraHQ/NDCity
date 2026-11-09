@@ -32,6 +32,12 @@ export async function endSession() {
   jar.delete(COOKIE);
 }
 
+/** Hash do login deste navegador (para desconectar os outros aparelhos). */
+export async function currentTokenHash(): Promise<string | null> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  return token ? hash(token) : null;
+}
+
 /** @ do morador logado (ou null). */
 export async function currentHandle(): Promise<string | null> {
   const token = (await cookies()).get(COOKIE)?.value;
@@ -39,7 +45,7 @@ export async function currentHandle(): Promise<string | null> {
   return getStore().getSessionHandle(hash(token));
 }
 
-export type Perks = { chatUntil: string | null; customize: boolean; moveCredits: number };
+export type Perks = { chatUntil: string | null; customizeCredits: number; moveCredits: number };
 
 export function perksFrom(ents: Entitlement[]): Perks {
   const get = (f: Feature) => ents.find((e) => e.feature === f);
@@ -47,7 +53,7 @@ export function perksFrom(ents: Entitlement[]): Perks {
   const chatActive = !!chat?.expiresAt && Date.parse(chat.expiresAt) > Date.now();
   return {
     chatUntil: chatActive ? chat!.expiresAt : null,
-    customize: !!get("customize"),
+    customizeCredits: get("customize")?.credits ?? 0,
     moveCredits: get("move")?.credits ?? 0,
   };
 }

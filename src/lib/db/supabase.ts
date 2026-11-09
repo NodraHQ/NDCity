@@ -5,7 +5,6 @@ import type {
   City,
   Claim,
   ClaimResult,
-  Code,
   Election,
   Entitlement,
   Feature,
@@ -54,7 +53,6 @@ type ClaimRow = {
   style: Style | null;
   created_at: string;
 };
-type CodeRow = { code: string; instagram_handle: string; created_at: string; used_at: string | null; claim_id: string | null };
 
 const toCity = (r: CityRow): City => ({
   id: r.id,
@@ -75,13 +73,6 @@ const toClaim = (r: ClaimRow): Claim => ({
   buildingType: r.building_type as BuildingType,
   style: r.style ?? null,
   createdAt: r.created_at,
-});
-const toCode = (r: CodeRow): Code => ({
-  code: r.code,
-  instagramHandle: r.instagram_handle,
-  createdAt: r.created_at,
-  usedAt: r.used_at,
-  claimId: r.claim_id,
 });
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -146,19 +137,6 @@ export const supabaseStore: Store = {
       | null;
     return row ? { ...toClaim(row), citySlug: row.cities?.slug ?? "" } : null;
   },
-  async claim(input): Promise<ClaimResult> {
-    const res = check(
-      await db().rpc("claim_house", {
-        p_code: input.code,
-        p_city_slug: input.citySlug,
-        p_lot_index: input.lotIndex,
-        p_lot_count: input.lotCount,
-        p_building: input.buildingType,
-      }),
-    ) as { ok: boolean; error?: string; claim?: ClaimRow; is_mayor?: boolean };
-    if (!res.ok || !res.claim) return { ok: false, error: (res.error ?? "code_not_found") as never };
-    return { ok: true, claim: toClaim(res.claim), isMayor: !!res.is_mayor };
-  },
   async claimDirect(input): Promise<ClaimResult> {
     const res = check(
       await db().rpc("claim_house_direct", {
@@ -217,21 +195,6 @@ export const supabaseStore: Store = {
     return { hadHouse: !!res.had_house };
   },
 
-  async getCode(code) {
-    const row = check(await db().from("codes").select("*").eq("code", code).maybeSingle());
-    return row ? toCode(row as CodeRow) : null;
-  },
-  async createCode(code, handle) {
-    const row = check(await db().from("codes").insert({ code, instagram_handle: handle }).select("*").single());
-    return toCode(row as CodeRow);
-  },
-  async listCodes(limit = 200) {
-    const rows = check(await db().from("codes").select("*").order("created_at", { ascending: false }).limit(limit));
-    return (rows as CodeRow[]).map(toCode);
-  },
-  async deleteCode(code) {
-    check(await db().from("codes").delete().eq("code", code).is("used_at", null));
-  },
 
   async createSession(tokenHash, handle) {
     check(await db().from("sessions").insert({ token_hash: tokenHash, handle }));
@@ -244,6 +207,11 @@ export const supabaseStore: Store = {
   },
   async deleteSession(tokenHash) {
     check(await db().from("sessions").delete().eq("token_hash", tokenHash));
+  },
+  async deleteOtherSessions(handle, keep) {
+    let q = db().from("sessions").delete().eq("handle", handle);
+    if (keep) q = q.neq("token_hash", keep);
+    check(await q);
   },
 
   async getEntitlements(handle) {
@@ -259,6 +227,27 @@ export const supabaseStore: Store = {
     check(await db().rpc("grant_entitlement", { p_handle: handle, p_feature: feature, p_days: days ?? null, p_credits: credits ?? 0 }));
   },
 
+  async useCredit(handle, feature) {
+    return !!check(await db().rpc("use_credit", { p_handle: handle, p_feature: feature }));
+  },
+  async revokeEntitlement(handle, feature, { days, credits }) {
+    check(await db().rpc("revoke_entitlement", { p_handle: handle, p_feature: feature, p_days: days ?? null, p_credits: credits ?? 0 }));
+  },
+  async listRecentMessages({ citySlug, limit }) {
+    let q = db().from("messages").select("id, handle, body, created_at, cities!inner(slug, name)").order("id", { ascending: false }).limit(limit);
+    if (citySlug) q = q.eq("cities.slug", citySlug);
+    const rows = check(await q) as unknown as {
+      id: number;
+      handle: string;
+      body: string;
+      created_at: string;
+      cities: { slug: string; name: string };
+    }[];
+    return rows.map((r) => ({ id: r.id, handle: r.handle, body: r.body, createdAt: r.created_at, citySlug: r.cities.slug, cityName: r.cities.name }));
+  },
+  async deleteMessage(id) {
+    check(await db().from("messages").delete().eq("id", id));
+  },
   async listMessages(cityId, afterId, limit) {
     const rows = check(
       await db()

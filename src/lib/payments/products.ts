@@ -17,11 +17,11 @@ export const PRODUCTS = {
   },
   personalizar: {
     feature: "customize" as Feature,
-    label: "Personalização",
-    description: "Escolha as cores da sua casa (e da prefeitura, se você for prefeito). Para sempre.",
+    label: "Pintura",
+    description: "1 pintura: cores, modelo pronto e bandeira para a sua casa (ou, se você for prefeito, uma proposta de pintura da prefeitura). Teste à vontade na prévia: só conta quando você salva.",
     priceCents: 100,
     days: undefined,
-    credits: 0,
+    credits: 1,
   },
   mudanca: {
     feature: "move" as Feature,

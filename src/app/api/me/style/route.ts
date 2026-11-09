@@ -6,14 +6,14 @@ import { currentResident } from "@/lib/resident";
 import { sanitizeStyle } from "@/lib/styles";
 
 /**
- * Personalizar a casa (recurso pago) ou propor a pintura da prefeitura
- * (o prefeito propõe, os moradores votam).
+ * Pintar a casa ou propor a pintura da prefeitura (o prefeito propõe, os
+ * moradores votam). Cada uma gasta 1 pintura (recurso pago).
  */
 export async function POST(req: Request) {
   const r = await currentResident();
   if (!r?.house) return NextResponse.json({ ok: false, message: "Entre na sua conta primeiro." }, { status: 401 });
-  if (!r.perks.customize)
-    return NextResponse.json({ ok: false, message: "A personalização é um recurso pago." }, { status: 402 });
+  if (r.perks.customizeCredits < 1)
+    return NextResponse.json({ ok: false, message: "Você não tem pintura disponível. Compre uma pintura para salvar." }, { status: 402 });
 
   const body = await req.json().catch(() => null);
   const style = sanitizeStyle(body?.style);
@@ -23,6 +23,8 @@ export async function POST(req: Request) {
     if (!city || city.mayorHandle !== r.handle)
       return NextResponse.json({ ok: false, message: "Só o prefeito pode pintar a prefeitura." }, { status: 403 });
     if (!style) return NextResponse.json({ ok: false, message: "Escolha alguma mudança." }, { status: 400 });
+    if (!(await store.useCredit(r.handle, "customize")))
+      return NextResponse.json({ ok: false, message: "Você não tem pintura disponível." }, { status: 402 });
     const { approvedNow } = await proposeHall(city, r.handle, style);
     await audit({ actor: r.handle, action: "proposta_prefeitura", handle: r.handle, citySlug: city.slug, details: { aprovada_na_hora: approvedNow } });
     return NextResponse.json({
@@ -32,6 +34,8 @@ export async function POST(req: Request) {
         : "Proposta enviada! Os moradores têm 24h para votar.",
     });
   } else {
+    if (!(await store.useCredit(r.handle, "customize")))
+      return NextResponse.json({ ok: false, message: "Você não tem pintura disponível." }, { status: 402 });
     await store.setHouseStyle(r.handle, style);
     await audit({ actor: r.handle, action: "casa_pintada", handle: r.handle, citySlug: r.house.citySlug, details: { bandeira: !!style?.flag } });
   }

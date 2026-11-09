@@ -299,3 +299,8 @@ button.banner.vote { width: auto; left: 16px; right: 76px; margin: 0; max-width:
   .sheet.customize .house-preview { width: 100%; display: flex; justify-content: center; }
   .sheet.customize .house-preview canvas { width: 100% !important; max-width: 380px; height: auto !important; }
 }
+/* ---------- termos */
+.legal .card p, .legal .card li { color: var(--ink) !important; font-size: 14px !important; line-height: 1.55; }
+.legal .card ul { padding-left: 20px; margin: 6px 0; }
+.legal .card a, .modal .muted a { color: var(--ink); }
+.admin.legal { max-width: 760px; }

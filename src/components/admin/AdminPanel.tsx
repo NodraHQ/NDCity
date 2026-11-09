@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildingLabel } from "@/lib/buildings";
-import type { Code, HouseRow, LogEntry, OfficeHolder } from "@/lib/db/types";
+import type { HouseRow, LogEntry, OfficeHolder } from "@/lib/db/types";
 import { STATE_FLAG_UFS } from "@/lib/flags";
 import { type ProductId, PRODUCTS, formatPrice } from "@/lib/payments/products";
 
-type Tab = "acessos" | "historico" | "codigos" | "casas" | "ocupacao" | "eleicoes" | "recursos" | "integracao";
+type Tab = "acessos" | "historico" | "codigos" | "casas" | "ocupacao" | "eleicoes" | "recursos" | "chat";
 type CityStat = { slug: string; name: string; uf: string | null; houses: number; lots: number; pct: number; mayor: string | null };
 type StateStat = { uf: string; municipios: number; occupied: number; houses: number; pct: number; governor: string | null };
 type Overview = { houses: HouseRow[]; cities: CityStat[]; states: StateStat[]; president: string | null };
@@ -66,9 +66,9 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
     ["casas", "🏠 Casas"],
     ["ocupacao", "📊 Ocupação"],
     ["codigos", "🔑 Acesso"],
+    ["chat", "💬 Chat"],
     ["eleicoes", "🗳 Eleições"],
     ["recursos", "✨ Recursos pagos"],
-    ["integracao", "🤖 Integração"],
   ];
 
   return (
@@ -105,7 +105,7 @@ export default function AdminPanel({ storeKind }: { storeKind: "supabase" | "mem
         {tab === "codigos" && <CodesTab />}
         {tab === "eleicoes" && <ElectionsTab />}
         {tab === "recursos" && <PerksTab />}
-        {tab === "integracao" && <IntegrationTab />}
+        {tab === "chat" && <ChatTab />}
       </div>
     </main>
   );
@@ -260,18 +260,9 @@ function Bar({ pct }: { pct: number }) {
 
 function CodesTab() {
   const [handle, setHandle] = useState("");
-  const [codes, setCodes] = useState<Code[]>([]);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [last, setLast] = useState<Issued | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    const j = await api("/api/admin/codes");
-    if (j.ok) setCodes(j.codes);
-  }, []);
-  useEffect(() => {
-    load();
-  }, [load]);
 
   async function generate(e: React.FormEvent) {
     e.preventDefault();
@@ -282,52 +273,77 @@ function CodesTab() {
     if (!j.ok) return setMsg({ text: j.message, error: true });
     setLast(j);
     setHandle("");
-    load();
-  }
-
-  async function remove(code: string) {
-    if (!confirm(`Apagar o código ${code}?`)) return;
-    await api(`/api/admin/codes?code=${encodeURIComponent(code)}`, "DELETE");
-    load();
   }
 
   return (
-    <>
-      <form className="card" onSubmit={generate}>
-        <h2>🔑 Código de acesso</h2>
-        <p>
-          Para quem esqueceu a senha: digite o nome de usuário e mande o <b>código de acesso</b> (ENT-…) para a pessoa. Ela entra com
-          usuário + código no lugar da senha e depois cria uma senha nova. Vale uma vez só, por 24h.
-        </p>
-        <div className="row">
-          <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="nome de usuário" autoCapitalize="none" autoComplete="off" />
-          <button className="btn primary" disabled={busy || !handle.trim()}>Gerar</button>
-        </div>
-        {msg && <p className={msg.error ? "error" : "ok"}>{msg.text}</p>}
-        {last && <IssuedCode issued={last} />}
-      </form>
-      <div className="card">
-        <h2>Códigos ({codes.length})</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>@</th><th>Código</th><th>Situação</th><th></th></tr>
-            </thead>
-            <tbody>
-              {codes.map((c) => (
-                <tr key={c.code}>
-                  <td>@{c.instagramHandle}</td>
-                  <td><code>{c.code}</code></td>
-                  <td>{c.usedAt ? "✅ usado" : "⏳ esperando"}</td>
-                  <td>{!c.usedAt && <button className="btn tiny" onClick={() => remove(c.code)}>apagar</button>}</td>
-                </tr>
-              ))}
-              {!codes.length && <tr><td colSpan={4}>Nenhum código ainda.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+    <form className="card" onSubmit={generate}>
+      <h2>🔑 Código de acesso</h2>
+      <p>
+        Para quem esqueceu a senha: digite o nome de usuário e mande o <b>código de acesso</b> (ENT-…) para a pessoa. Ela entra com
+        usuário + código no lugar da senha e depois cria uma senha nova. Vale uma vez só, por 24h.
+      </p>
+      <div className="row">
+        <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="nome de usuário" autoCapitalize="none" autoComplete="off" />
+        <button className="btn primary" disabled={busy || !handle.trim()}>Gerar</button>
       </div>
-    </>
+      {msg && <p className={msg.error ? "error" : "ok"}>{msg.text}</p>}
+      {last && <IssuedCode issued={last} />}
+    </form>
+  );
+}
+
+// ------------------------------------------------------------------ chat
+
+type ChatMsg = { id: number; handle: string; body: string; createdAt: string; citySlug: string; cityName: string };
+
+function ChatTab() {
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
+  const [city, setCity] = useState("");
+  const [q, setQ] = useState("");
+  const load = useCallback(async () => {
+    const j = await api(`/api/admin/chat${city ? `?city=${encodeURIComponent(city)}` : ""}`);
+    if (j.ok) setMsgs(j.messages);
+  }, [city]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const cities = useMemo(() => [...new Map(msgs.map((m) => [m.citySlug, m.cityName])).entries()], [msgs]);
+  const shown = msgs.filter((m) => !q || m.body.toLowerCase().includes(q.toLowerCase()) || m.handle.includes(q.toLowerCase()));
+
+  async function remove(m: ChatMsg) {
+    if (!confirm(`Apagar a mensagem de @${m.handle}?\n\n“${m.body}”`)) return;
+    await api(`/api/admin/chat?id=${m.id}&handle=${encodeURIComponent(m.handle)}`, "DELETE");
+    setMsgs((l) => l.filter((x) => x.id !== m.id));
+  }
+
+  return (
+    <div className="card">
+      <h2>💬 Chats das cidades</h2>
+      <p>Últimas 200 mensagens. O ✕ apaga a mensagem na hora para todo mundo. Para casos graves, remova a casa da pessoa na aba Casas.</p>
+      <div className="filters">
+        <select value={city} onChange={(e) => setCity(e.target.value)}>
+          <option value="">Todas as cidades</option>
+          {cities.map(([slug, name]) => <option key={slug} value={slug}>{name}</option>)}
+        </select>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar palavra ou usuário" autoCapitalize="none" />
+      </div>
+      <div className="table-wrap">
+        <table className="logs">
+          <tbody>
+            {shown.map((m) => (
+              <tr key={m.id}>
+                <td>{fmtDate(m.createdAt)}</td>
+                <td>{m.cityName}</td>
+                <td>@{m.handle}</td>
+                <td>{m.body}</td>
+                <td><button className="btn tiny danger" aria-label={`Apagar mensagem de @${m.handle}`} onClick={() => remove(m)}>✕</button></td>
+              </tr>
+            ))}
+            {!shown.length && <tr><td>Nenhuma mensagem.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -523,7 +539,7 @@ function PerksTab() {
     const p = j.perks;
     const parts = [
       p.chatUntil ? `chat até ${new Date(p.chatUntil).toLocaleDateString("pt-BR")}` : "sem chat",
-      p.customize ? "personalização liberada" : "sem personalização",
+      `${p.customizeCredits} pintura(s)`,
       `${p.moveCredits} mudança(s)`,
     ];
     setMsg({ text: `${j.message} Agora tem: ${parts.join(", ")}.` });
@@ -694,6 +710,7 @@ const LOG_LABELS: Record<string, string> = {
   estorno: "↩ estorno",
   limite_alterado: "🛑 limite mensal alterado",
   conta_criada: "🆕 criou conta",
+  mensagem_apagada: "🧹 mensagem do chat apagada",
   senha_criada: "🔒 criou senha",
   senha_trocada: "🔒 trocou a senha",
 };
@@ -792,7 +809,7 @@ function LogsTab() {
 
 // ------------------------------------------------------- código emitido
 
-type Issued = { handle: string; kind: "acesso" | "resgate" | "sem_conta"; code: string | null; expiresAt: string | null; message: string };
+type Issued = { handle: string; kind: "acesso"; code: string | null; expiresAt: string | null; message: string };
 
 function IssuedCode({ issued, onClose }: { issued: Issued; onClose?: () => void }) {
   const [copied, setCopied] = useState("");
@@ -816,63 +833,6 @@ function IssuedCode({ issued, onClose }: { issued: Issued; onClose?: () => void 
         {copied && <span className="ok">✓ {copied} copiado</span>}
       </div>
       {issued.kind === "acesso" && <p className="muted">Confira se quem pediu é mesmo o dono da conta {issued.handle} antes de mandar.</p>}
-    </div>
-  );
-}
-
-// ------------------------------------------------------------ integração
-
-function IntegrationTab() {
-  const [info, setInfo] = useState<{ configured: boolean; site: string; endpoint: string; key: string | null } | null>(null);
-  const [show, setShow] = useState(false);
-  const [test, setTest] = useState("");
-  const [result, setResult] = useState("");
-  useEffect(() => {
-    api("/api/admin/integration").then((j) => j.ok && setInfo(j));
-  }, []);
-  if (!info) return <div className="card">Carregando…</div>;
-  const getUrl = `${info.endpoint}?handle={{username}}&key=${show ? info.key : "SUA_CHAVE"}&format=text`;
-
-  async function runTest() {
-    if (!info?.key) return;
-    const r = await fetch(`${info.endpoint}?handle=${encodeURIComponent(test)}&key=${encodeURIComponent(info.key)}&format=text`);
-    setResult(await r.text());
-  }
-
-  return (
-    <div className="card">
-      <h2>🤖 Ferramenta de DM (bot)</h2>
-      <p>
-        Opcional. Se um dia você usar uma ferramenta que consiga <b>chamar um link</b> (Make, n8n, ManyChat…), ela pode entregar
-        sozinha o código de acesso para quem esqueceu a senha: chama o endereço abaixo com o nome de usuário e cola a resposta na
-        mensagem. Quem ainda não tem conta recebe o convite para criar uma.
-      </p>
-      {!info.configured && <p className="error">A chave do bot (BOT_SECRET) não está configurada na Vercel.</p>}
-      <p><b>Jeito mais simples (GET, resposta em texto pronto):</b></p>
-      <div className="code small">{getUrl}</div>
-      <p className="muted">
-        Troque <code>{"{{username}}"}</code> pela variável de nome de usuário da sua ferramenta.
-      </p>
-      <p><b>Ou POST com JSON</b> (resposta com <code>code</code> e <code>message</code>):</p>
-      <div className="code small">
-        POST {info.endpoint}
-        <br />
-        Authorization: Bearer {show ? info.key : "SUA_CHAVE"}
-        <br />
-        {'{ "handle": "fulano" }'}
-      </div>
-      <div className="row left wrap">
-        <button className="btn" onClick={() => setShow((v) => !v)}>{show ? "Esconder chave" : "Mostrar chave"}</button>
-        {info.key && <button className="btn" onClick={() => navigator.clipboard.writeText(info.key!)}>Copiar chave</button>}
-      </div>
-      <p className="error">⚠️ A chave é como uma senha: só cole dentro da ferramenta de DM, nunca em post, story ou mensagem.</p>
-      <h2>Testar</h2>
-      <div className="row">
-        <input value={test} onChange={(e) => setTest(e.target.value)} placeholder="@fulano" autoCapitalize="none" />
-        <button className="btn primary" disabled={!test.trim() || !info.key} onClick={runTest}>Testar</button>
-      </div>
-      {result && <pre className="code small">{result}</pre>}
-      <p className="muted">O teste gera um código de verdade para esse @.</p>
     </div>
   );
 }

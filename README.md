@@ -1,96 +1,62 @@
 # NDCity 🏘
 
-O Brasil em pixel art (visão isométrica, estilo SimCity clássico, sem
-mecânica de jogo) onde cada seguidor de um perfil do Instagram resgata uma
-casinha com o seu @.
+O Brasil em pixel art (visão isométrica, estilo cidade clássica de computador
+antigo, sem mecânica de jogo). Cada pessoa cria uma conta e ganha uma casinha na
+sua cidade. Quem chega primeiro numa cidade vira prefeito.
 
-## O que já funciona
+Site: https://ndcity.vercel.app
 
-- **Mapa do Brasil** em pixel art com os 5.570 municípios (dados do IBGE). Busca
-  por nome; capitais e cidades com moradores aparecem destacadas.
-- **Cada município é uma cidade** gerada automaticamente (capitais são maiores).
-  Toda cidade começa bloqueada; quem chega primeiro vira **prefeito** (só troféu).
-- **Prefeitura com sucessão**: se o prefeito sai (remoção ou mudança), a
-  prefeitura passa para o morador mais antigo; sem moradores, fica vaga.
-- **Uma casa por @**, presa à cidade escolhida.
-- **Dia e noite de verdade**: calculado pela posição do sol em cada cidade, com
-  luzes nas casas, postes e faróis. Teste com `?hora=22` no fim do endereço.
-- **População**: carros e pessoas aumentam conforme a cidade ganha casas.
-- **Login do morador**: entra com o mesmo código do resgate ("Já tenho casinha").
-- **Recursos pagos** (liberados manualmente no admin até o gateway ficar pronto):
-  - 💬 Chat da cidade, só entre moradores, com filtro de palavrões (R$ 5/mês)
-  - 🎨 Personalização: cores, 12 modelos prontos e bandeira (R$ 1)
-  - 🚚 Caminhão de mudança para trocar de cidade (R$ 5)
-- **Bandeiras**: com a personalização, a casa ganha um mastro com bandeira: a
-  do estado (27 bandeiras em pixel art) ou uma desenhada pintando quadradinhos.
-- **Prefeitura votada**: o prefeito propõe cores e bandeira; os moradores votam
-  sim/não por 24h. Mais da metade decide.
-- **Eleições** para governador e presidente: o admin cria o evento, moradores se
-  candidatam e votam. O cargo aparece no mapa só enquanto a pessoa tem casa.
-- **Mudança** deixa escolher de novo o tipo de construção.
-- **Admin** (`/admin`), em abas:
-  - Casas: lista com filtro por estado/cidade/@ e botão ✕ para remover
-  - Ocupação: quanto cada estado e cidade está ocupado, prefeitos e governadores
-  - Acessos: online agora, visitantes por dia, páginas mais vistas e dinheiro
-    movimentado (contador próprio e anônimo; Google Analytics é opcional via
-    `NEXT_PUBLIC_GA_ID`)
-  - Histórico: tudo o que acontece (chegadas, mudanças, pagamentos, códigos,
-    votações, eleições…), com filtro por tipo e por @
-  - Códigos, Eleições e Recursos pagos (com opção de cortesia)
+## O que tem
 
-Sem o Supabase configurado, o site roda em **modo teste** (nada fica salvo).
+- **Mapa do Brasil** com os 5.570 municípios (dados do IBGE), busca por nome e
+  dia/noite de verdade passando pelo país.
+- **Cada município é uma cidade** gerada automaticamente. Toda cidade começa
+  bloqueada; o primeiro morador vira **prefeito** (só troféu). Se o prefeito
+  sai, o morador mais antigo assume.
+- **Conta normal**: nome de usuário + senha. Uma casa por pessoa, presa à cidade.
+- **17 tipos de construção**, carrinhos e pessoas (mais casas, mais movimento),
+  luzes à noite.
+- **Recursos pagos** (Mercado Pago, Pix ou cartão, cobrança única):
+  - 💬 Chat da cidade, só entre moradores, com filtro de palavrões: R$ 5 por 30 dias
+  - 🎨 Pintura: R$ 1 por pintura (cores, 12 modelos prontos, bandeira de estado ou
+    desenhada à mão, com prévia)
+  - 🚚 Mudança de cidade: R$ 5 por mudança
+  - Estorno ou contestação tira o recurso automaticamente.
+  - **Limite mensal de vendas** (padrão R$ 2.000): ao chegar nele, as compras param
+    até o dia 1º.
+- **Prefeitura votada**: o prefeito propõe a pintura, os moradores votam (24h).
+- **Eleições** para governador e presidente, criadas pelo admin.
+- **Admin** (`/admin`): acessos, histórico de tudo, casas (com remover), ocupação
+  por estado/cidade, código de acesso para quem esqueceu a senha, moderação do
+  chat, eleições e recursos pagos (liberar manualmente ou cortesia).
+- **Termos e Privacidade** em `/termos`.
 
----
+## Configuração (Vercel → Settings → Environment Variables)
 
-## Colocando no ar (dá para fazer tudo pelo celular)
+| Nome | O que é |
+|---|---|
+| `ADMIN_PASSWORD` | senha do `/admin` |
+| `SUPABASE_URL` | endereço do projeto no Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | chave secreta do Supabase (nunca no navegador) |
+| `NEXT_PUBLIC_SITE_URL` | `https://ndcity.vercel.app` |
+| `MP_ACCESS_TOKEN` | Access Token de produção do Mercado Pago (liga os pagamentos) |
+| `MP_WEBHOOK_SECRET` | opcional: assinatura do aviso de pagamento do Mercado Pago |
+| `NEXT_PUBLIC_GA_ID` | opcional: Google Analytics |
 
-São 3 contas gratuitas: **GitHub** (já tem), **Supabase** (banco de dados) e
-**Vercel** (hospedagem).
+Sem Supabase, o site roda em **modo teste** (dados só na memória). Sem
+`MP_ACCESS_TOKEN`, o botão de comprar pede para falar com a equipe e o admin
+libera manualmente.
 
-### 1. Supabase (banco de dados)
+### Banco de dados
 
-1. Entre em **supabase.com** → *Start your project* → entre com o GitHub.
-2. Toque em **New project**. Dê um nome (ex.: `ndcity`), crie uma senha
-   para o banco (guarde, mas não vamos precisar dela agora) e escolha a região
-   **South America (São Paulo)**. Toque em **Create new project** e espere ~2 min.
-3. No menu (☰), abra **SQL Editor** → **New query**.
-4. Rode, em ordem, os arquivos da pasta [`supabase/migrations`](supabase/migrations)
-   (`0001_init.sql`, `0002_brasil_chat_pagos.sql`, `0003_eleicoes_prefeitura_votada.sql`, `0004_historico_acessos.sql`): abra cada um aqui no
-   GitHub, toque em **copiar**, cole no SQL Editor e toque em **Run**.
-5. No menu, vá em **Project Settings** → **API** (ou **Data API** / **API Keys**). Anote:
-   - **Project URL** (algo como `https://abcd.supabase.co`)
-   - a chave **secret** / **service_role** (toque em *Reveal* para ver). ⚠️ Essa
-     chave é como uma senha mestra: não mostre para ninguém.
+Rode, em ordem, os arquivos de [`supabase/migrations`](supabase/migrations) no
+SQL Editor do Supabase. Todos podem ser rodados de novo sem problema.
 
-### 2. Vercel (colocar o site no ar)
+### Mercado Pago
 
-1. Entre em **vercel.com** → *Sign up* → **Continue with GitHub**.
-2. Toque em **Add New… → Project** e escolha o repositório **NDCity** → **Import**.
-3. Antes de tocar em Deploy, abra **Environment Variables** e adicione uma por uma:
-
-   | Nome | Valor |
-   |---|---|
-   | `ADMIN_PASSWORD` | uma senha forte, inventada por você |
-   | `SUPABASE_URL` | o *Project URL* do passo 1.5 |
-   | `SUPABASE_SERVICE_ROLE_KEY` | a chave *secret/service_role* do passo 1.5 |
-   | `NEXT_PUBLIC_INSTAGRAM_PROFILE` | (opcional) seu @ sem o arroba |
-
-4. Toque em **Deploy** e espere. A Vercel te dá um endereço tipo
-   `ndcity.vercel.app`.
-
-> Mudou alguma variável depois? Vá em **Deployments → ⋯ → Redeploy** para valer.
-
-### 3. Usando
-
-- Abra `seu-site.vercel.app/admin`, entre com a `ADMIN_PASSWORD`.
-- Digite o @ de um seguidor e toque em **Gerar**.
-- Toque em **Copiar mensagem pra DM** e mande para a pessoa no Instagram.
-- A pessoa abre o site, busca a cidade dela no mapa, toca em **Resgatar
-  casinha**, digita o código, escolhe o tipo e o lote. Pronto!
-- Alguém pagou um recurso por Pix? Em **Liberar recurso pago**, digite o @ e
-  escolha o produto.
-
----
+Aviso de pagamento (webhook): `https://ndcity.vercel.app/api/payments/webhook`,
+evento **Pagamentos**. O site nunca confia só no aviso: sempre confirma o
+pagamento direto na API do Mercado Pago antes de liberar.
 
 ## Para quem programa
 
@@ -102,34 +68,28 @@ npm run typecheck
 
 Crie um `.env.local` a partir do `.env.example`.
 
-### Estrutura
-
 ```
 src/
   app/                    páginas e APIs (Next.js App Router)
     page.tsx              mapa do Brasil
     c/[slug]/page.tsx     uma cidade (ex.: /c/goiania-go)
-    admin/                painel do dono do perfil
-    api/claim/            conferir código e resgatar
-    api/me/               login do morador, personalizar, mudança
+    termos/               termos e privacidade
+    admin/                painel do dono
+    api/signup, api/me/   conta, login, senha, pintura, mudança
+    api/claim/            resgatar a casinha
     api/chat/[slug]/      chat da cidade
-    api/purchase/         início de compra (gateway entra aqui)
-    api/admin/            códigos, liberar recursos, remover casinha
+    api/purchase/         abrir pagamento e conferir
+    api/payments/webhook/ aviso do Mercado Pago
+    api/admin/            tudo do admin
   components/
     world/                mapa do Brasil (PixiJS)
+    city/                 cidade (PixiJS): art.ts (pixel art por código), scene.ts
     CityView.tsx          tela da cidade e todos os fluxos
-    ChatPanel.tsx         chat
-    city/art.ts           pixel art feita por código (sem imagens de terceiros)
-    city/scene.ts         PixiJS: câmera, animações, dia/noite, toques
   data/                   municípios e contorno do Brasil (gerados por scripts/)
   lib/
     city/generate.ts      seed -> ruas, lotes, caminhos
-    geo/cities.ts         lista e busca de municípios
-    sun.ts                posição do sol (dia e noite)
-    resident.ts           login do morador e recursos liberados
-    payments/products.ts  produtos pagos e preços
-    moderation/           filtro de palavrões
+    payments/             produtos, Mercado Pago, limite mensal, liberação
     db/                   banco: Supabase ou memória (modo teste)
+promo-assets/             material para vídeos e posts
 supabase/migrations/      SQL do banco
-docs/ROADMAP.md           próximas etapas e onde cada uma se encaixa
 ```

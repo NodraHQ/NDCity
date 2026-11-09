@@ -26,7 +26,7 @@ const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
   loading: () => <div className="city-loading">Construindo a cidade…</div>,
 });
 
-type Perks = { chatUntil: string | null; customize: boolean; moveCredits: number };
+type Perks = { chatUntil: string | null; customizeCredits: number; moveCredits: number };
 type ProposalV = { id: string; proposer: string; style: Style; endsAt: string; yes: number; no: number; residents: number; myVote: boolean | null; canVote: boolean };
 type Civic = { offices: { president: string | null; governors: Record<string, string> }; elections: ElectionV[] };
 type Me = { handle: string; citySlug: string | null; perks: Perks; hasPassword?: boolean } | null;
@@ -269,7 +269,7 @@ export default function CityView({ initial }: { initial: CityData }) {
   }
 
   function openCustomize(target: "house" | "hall") {
-    if (!me?.perks.customize) return setStep({ name: "paywall", product: "personalizar" });
+    if (!me || me.perks.customizeCredits < 1) return setStep({ name: "paywall", product: "personalizar" });
     const current = target === "hall" ? city.hallStyle : myHouse?.style;
     setStep({ name: "customize", target, style: { ...(current ?? {}) } });
   }
@@ -279,7 +279,7 @@ export default function CityView({ initial }: { initial: CityData }) {
     setStep({ ...step, busy: true, error: undefined });
     const json = await postJSON("/api/me/style", { target: step.target, style: step.style });
     if (!json.ok) return setStep({ ...step, busy: false, error: json.message });
-    await Promise.all([refresh(), refreshCivic()]);
+    await Promise.all([refresh(), refreshCivic(), refreshMe()]);
     if (step.target === "hall") setStep({ name: "notice", title: "🏛 Prefeitura", text: json.message });
     else setStep({ name: "idle" });
   }
@@ -630,8 +630,8 @@ export default function CityView({ initial }: { initial: CityData }) {
           <div className="menu">
             {myHouse && <button className="btn" onClick={() => { setFocusLot(null); setTimeout(() => setFocusLot(myHouse.lotIndex)); setStep({ name: "idle" }); }}>📍 Ver minha casa</button>}
             <button className="btn" onClick={openChat}>💬 Chat {me.perks.chatUntil ? "" : "🔒"}</button>
-            <button className="btn" onClick={() => openCustomize("house")}>🎨 Pintar minha casa {me.perks.customize ? "" : "🔒"}</button>
-            {isMayor && <button className="btn" onClick={() => openCustomize("hall")}>🏛 Propor pintura da prefeitura {me.perks.customize ? "" : "🔒"}</button>}
+            <button className="btn" onClick={() => openCustomize("house")}>🎨 Pintar minha casa {me.perks.customizeCredits ? `(${me.perks.customizeCredits})` : "🔒"}</button>
+            {isMayor && <button className="btn" onClick={() => openCustomize("hall")}>🏛 Propor pintura da prefeitura {me.perks.customizeCredits ? `(${me.perks.customizeCredits})` : "🔒"}</button>}
             {myElections.length > 0 && <button className="btn" onClick={() => setStep({ name: "elections" })}>🗳 Eleições ({myElections.length})</button>}
             {proposal && <button className="btn" onClick={() => setStep({ name: "proposal" })}>📜 Votação da prefeitura</button>}
             <Link className="btn" href="/">🚚 Mudar de cidade{me.perks.moveCredits ? ` (${me.perks.moveCredits})` : " 🔒"}</Link>
@@ -650,6 +650,9 @@ export default function CityView({ initial }: { initial: CityData }) {
         <div className="sheet tall customize">
           <h3>{step.target === "hall" ? "🏛 Proposta para a prefeitura" : "🎨 Pintar minha casa"}</h3>
           {step.target === "hall" && <p className="muted">Você escolhe; os moradores votam sim ou não (24h). Mais da metade decide.</p>}
+          <p className="muted">
+            Teste à vontade na prévia. Ao {step.target === "hall" ? "propor" : "salvar"}, gasta 1 pintura (você tem {me?.perks.customizeCredits ?? 0}).
+          </p>
           <div className="customize-grid">
           <div className="c-preview preview-box">
             <HousePreview
@@ -807,6 +810,9 @@ export default function CityView({ initial }: { initial: CityData }) {
             <p>{PRODUCTS[step.product].description}</p>
             <p className="price">{formatPrice(PRODUCTS[step.product].priceCents)}{step.product === "chat_mensal" ? " / mês" : ""}</p>
             {step.message && <p className="ok">{step.message}</p>}
+            <p className="muted">
+              Pix ou cartão, cobrança única (não renova sozinho). Veja os <a href="/termos" target="_blank">Termos e reembolso</a>.
+            </p>
             <div className="row">
               <button className="btn" onClick={() => setStep({ name: "idle" })}>Agora não</button>
               {!step.message && <button className="btn primary" disabled={step.busy} onClick={() => buy(step.product)}>Quero!</button>}

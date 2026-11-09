@@ -3,9 +3,7 @@ import type {
   ActiveCity,
   City,
   Claim,
-  ClaimInput,
   ClaimResult,
-  Code,
   Election,
   Entitlement,
   HallProposal,
@@ -27,7 +25,6 @@ import type {
 type Data = {
   cities: City[];
   claims: Claim[];
-  codes: Code[];
   sessions: Map<string, string>;
   entitlements: Entitlement[];
   messages: (Message & { cityId: string })[];
@@ -52,7 +49,6 @@ function data(): Data {
   g.__cidadezinhaMem ??= {
     cities: [],
     claims: [],
-    codes: [],
     sessions: new Map(),
     entitlements: [],
     messages: [],
@@ -137,36 +133,6 @@ export const memoryStore: Store = {
     if (!claim) return null;
     return { ...claim, citySlug: d.cities.find((c) => c.id === claim.cityId)?.slug ?? "" };
   },
-  async claim(input: ClaimInput): Promise<ClaimResult> {
-    const d = data();
-    const code = d.codes.find((c) => c.code === input.code);
-    if (!code) return { ok: false, error: "code_not_found" };
-    if (code.usedAt) return { ok: false, error: "code_used" };
-    const city = d.cities.find((c) => c.slug === input.citySlug);
-    if (!city) return { ok: false, error: "city_not_found" };
-    if (input.lotIndex < 0 || input.lotIndex >= input.lotCount) return { ok: false, error: "invalid_lot" };
-    if (d.claims.some((c) => c.instagramHandle === code.instagramHandle)) return { ok: false, error: "handle_has_house" };
-    if (d.claims.some((c) => c.cityId === city.id && c.lotIndex === input.lotIndex)) return { ok: false, error: "lot_taken" };
-    const claim: Claim = {
-      id: randomUUID(),
-      cityId: city.id,
-      lotIndex: input.lotIndex,
-      instagramHandle: code.instagramHandle,
-      buildingType: input.buildingType,
-      style: null,
-      createdAt: now(),
-    };
-    d.claims.push(claim);
-    code.usedAt = claim.createdAt;
-    code.claimId = claim.id;
-    let isMayor = false;
-    if (!city.mayorHandle) {
-      city.mayorHandle = code.instagramHandle;
-      city.unlockedAt = claim.createdAt;
-      isMayor = true;
-    }
-    return { ok: true, claim, isMayor };
-  },
   async claimDirect(input): Promise<ClaimResult> {
     const d = data();
     const city = d.cities.find((c) => c.slug === input.citySlug);
@@ -244,7 +210,6 @@ export const memoryStore: Store = {
     const d = data();
     const claim = d.claims.find((c) => c.instagramHandle === handle);
     d.claims = d.claims.filter((c) => c.instagramHandle !== handle);
-    d.codes = d.codes.filter((c) => c.instagramHandle !== handle);
     for (const [k, v] of d.sessions) if (v === handle) d.sessions.delete(k);
     d.accounts.delete(handle);
     d.loginCodes = d.loginCodes.filter((c) => c.handle !== handle);
@@ -257,21 +222,6 @@ export const memoryStore: Store = {
     return { hadHouse: !!claim };
   },
 
-  async getCode(code) {
-    return data().codes.find((c) => c.code === code) ?? null;
-  },
-  async createCode(code, handle) {
-    const c: Code = { code, instagramHandle: handle, createdAt: now(), usedAt: null, claimId: null };
-    data().codes.unshift(c);
-    return c;
-  },
-  async listCodes(limit = 200) {
-    return data().codes.slice(0, limit);
-  },
-  async deleteCode(code) {
-    const d = data();
-    d.codes = d.codes.filter((c) => c.code !== code || c.usedAt);
-  },
 
   async createSession(tokenHash, handle) {
     data().sessions.set(tokenHash, handle);
@@ -281,6 +231,10 @@ export const memoryStore: Store = {
   },
   async deleteSession(tokenHash) {
     data().sessions.delete(tokenHash);
+  },
+  async deleteOtherSessions(handle, keep) {
+    const d = data();
+    for (const [k, v] of d.sessions) if (v === handle && k !== keep) d.sessions.delete(k);
   },
 
   async getEntitlements(handle) {
@@ -302,6 +256,33 @@ export const memoryStore: Store = {
     e.credits += credits ?? 0;
   },
 
+  async useCredit(handle, feature) {
+    const e = data().entitlements.find((x) => x.handle === handle && x.feature === feature);
+    if (!e || e.credits < 1) return false;
+    e.credits -= 1;
+    return true;
+  },
+  async revokeEntitlement(handle, feature, { days, credits }) {
+    const e = data().entitlements.find((x) => x.handle === handle && x.feature === feature);
+    if (!e) return;
+    if (days != null && e.expiresAt) e.expiresAt = new Date(Date.parse(e.expiresAt) - days * 86400000).toISOString();
+    e.credits = Math.max(0, e.credits - (credits ?? 0));
+  },
+  async listRecentMessages({ citySlug, limit }) {
+    const d = data();
+    return d.messages
+      .map((m) => {
+        const city = d.cities.find((c) => c.id === m.cityId);
+        return { id: m.id, handle: m.handle, body: m.body, createdAt: m.createdAt, citySlug: city?.slug ?? "", cityName: city?.name ?? "" };
+      })
+      .filter((m) => !citySlug || m.citySlug === citySlug)
+      .reverse()
+      .slice(0, limit);
+  },
+  async deleteMessage(id) {
+    const d = data();
+    d.messages = d.messages.filter((m) => m.id !== id);
+  },
   async listMessages(cityId, afterId, limit) {
     const msgs = data().messages.filter((m) => m.cityId === cityId && m.id > afterId);
     return msgs.slice(-limit).map(({ cityId: _c, ...m }) => m);

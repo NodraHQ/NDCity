@@ -6,8 +6,17 @@ import "./globals.css";
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID?.replace(/[^\w-]/g, "");
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://ndcity.vercel.app"),
   title: SITE_NAME,
-  description: "O Brasil em pixel art: cada seguidor resgata uma casinha na sua cidade.",
+  description: "O Brasil em pixel art: crie sua conta e ganhe sua casinha na sua cidade. Quem chega primeiro vira prefeito!",
+  openGraph: {
+    title: "NDCity: o Brasil em pixel art",
+    description: "Crie sua conta e ganhe sua casinha na sua cidade. Quem chega primeiro vira prefeito!",
+    locale: "pt_BR",
+    type: "website",
+    siteName: SITE_NAME,
+  },
+  twitter: { card: "summary_large_image", title: "NDCity: o Brasil em pixel art" },
 };
 
 export const viewport: Viewport = {

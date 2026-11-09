@@ -38,14 +38,6 @@ export type Claim = {
   createdAt: string;
 };
 
-export type Code = {
-  code: string;
-  instagramHandle: string;
-  createdAt: string;
-  usedAt: string | null;
-  claimId: string | null;
-};
-
 export type Feature = "chat" | "customize" | "move";
 
 export type Entitlement = {
@@ -127,17 +119,7 @@ export type DirectClaimInput = {
   buildingType: BuildingType;
 };
 
-export type ClaimInput = {
-  code: string;
-  citySlug: string;
-  lotIndex: number;
-  lotCount: number;
-  buildingType: BuildingType;
-};
-
 export type ClaimError =
-  | "code_not_found"
-  | "code_used"
   | "city_not_found"
   | "invalid_lot"
   | "lot_taken"
@@ -158,8 +140,7 @@ export interface Store {
   // casinhas
   listClaims(cityId: string): Promise<Claim[]>;
   findClaimByHandle(handle: string): Promise<(Claim & { citySlug: string }) | null>;
-  claim(input: ClaimInput): Promise<ClaimResult>;
-  /** Resgate de quem já tem conta (sem código). */
+  /** Resgate de quem já tem conta. */
   claimDirect(input: DirectClaimInput): Promise<ClaimResult>;
   moveHouse(input: {
     handle: string;
@@ -171,23 +152,27 @@ export interface Store {
   listAllHouses(): Promise<HouseRow[]>;
   countResidents(cityId: string): Promise<number>;
   setHouseStyle(handle: string, style: Style | null): Promise<void>;
-  /** Remove a casa e TODO o acesso do @ (códigos, logins) e passa a prefeitura adiante. */
+  /** Remove a casa e TODO o acesso da pessoa (senha, logins) e passa a prefeitura adiante. */
   removeHouse(handle: string): Promise<{ hadHouse: boolean }>;
-  // códigos
-  getCode(code: string): Promise<Code | null>;
-  createCode(code: string, handle: string): Promise<Code>;
-  listCodes(limit?: number): Promise<Code[]>;
-  deleteCode(code: string): Promise<void>;
   // login do morador
   createSession(tokenHash: string, handle: string): Promise<void>;
   getSessionHandle(tokenHash: string): Promise<string | null>;
   deleteSession(tokenHash: string): Promise<void>;
+  /** Desconecta todos os outros aparelhos da pessoa (ex.: ao trocar a senha). */
+  deleteOtherSessions(handle: string, keepTokenHash: string | null): Promise<void>;
   // recursos pagos
   getEntitlements(handle: string): Promise<Entitlement[]>;
   grantEntitlement(handle: string, feature: Feature, opts: { days?: number; credits?: number }): Promise<void>;
+  /** Gasta 1 crédito (mudança/pintura). Devolve false se não tinha. */
+  useCredit(handle: string, feature: Feature): Promise<boolean>;
+  /** Estorno: tira os dias/créditos que a compra tinha dado. */
+  revokeEntitlement(handle: string, feature: Feature, opts: { days?: number; credits?: number }): Promise<void>;
   // chat
   listMessages(cityId: string, afterId: number, limit: number): Promise<Message[]>;
   addMessage(cityId: string, handle: string, body: string): Promise<Message>;
+  /** Moderação: últimas mensagens (de uma cidade ou de todas). */
+  listRecentMessages(opts: { citySlug?: string; limit: number }): Promise<(Message & { citySlug: string; cityName: string })[]>;
+  deleteMessage(id: number): Promise<void>;
   // eleições
   createElection(office: Office, uf: string | null, endsAt: string): Promise<Election>;
   listElections(status?: Election["status"]): Promise<Election[]>;
