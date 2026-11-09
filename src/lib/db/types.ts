@@ -176,6 +176,8 @@ export interface Store {
   grantEntitlement(handle: string, feature: Feature, opts: { days?: number; credits?: number }): Promise<void>;
   /** Gasta 1 crédito (mudança/pintura). Devolve false se não tinha. */
   useCredit(handle: string, feature: Feature): Promise<boolean>;
+  /** Conta uma tentativa (senha etc.); false se passou do limite na janela. Vale para todos os servidores. */
+  hitRate(key: string, max: number, windowSeconds: number): Promise<boolean>;
   /** Estorno: tira os dias/créditos que a compra tinha dado. */
   revokeEntitlement(handle: string, feature: Feature, opts: { days?: number; credits?: number }): Promise<void>;
   // chat

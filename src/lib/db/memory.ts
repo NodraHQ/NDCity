@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { rateLimit } from "@/lib/rate-limit";
 import type {
   ActiveCity,
   City,
@@ -267,6 +268,9 @@ export const memoryStore: Store = {
     if (!e || e.credits < 1) return false;
     e.credits -= 1;
     return true;
+  },
+  async hitRate(key, max, windowSeconds) {
+    return rateLimit(`db:${key}`, max, windowSeconds * 1000);
   },
   async revokeEntitlement(handle, feature, { days, credits }) {
     const e = data().entitlements.find((x) => x.handle === handle && x.feature === feature);

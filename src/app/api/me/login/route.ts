@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     handle = owner;
     method = "codigo_acesso";
   } else {
-    if (!rateLimit(`login-handle:${handleIn}`, 8, 15 * 60_000))
+    if (!rateLimit(`login-handle:${handleIn}`, 8, 15 * 60_000) || !(await store.hitRate(`login:${handleIn}`, 15, 15 * 60)))
       return NextResponse.json({ ok: false, message: "Muitas tentativas para esse usuário. Espere 15 minutos." }, { status: 429 });
     const hash = await store.getPasswordHash(handleIn);
     if (!hash || !(await verifyPassword(secret, hash))) return NextResponse.json({ ok: false, message: "Usuário ou senha errados." });

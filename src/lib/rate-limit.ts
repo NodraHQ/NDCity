@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "crypto";
 
 /**
  * Limite simples de tentativas por IP, para ninguém ficar chutando
@@ -18,6 +19,11 @@ export function rateLimit(key: string, max: number, windowMs: number): boolean {
   }
   entry.count++;
   return entry.count <= max;
+}
+
+/** Versão embaralhada do IP, para limites guardados no banco (o IP em si não é guardado). */
+export function ipKey(req: Request): string {
+  return createHash("sha256").update(`ndcity:${clientIp(req)}`).digest("hex").slice(0, 16);
 }
 
 export function clientIp(req: Request): string {

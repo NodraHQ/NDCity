@@ -16,6 +16,7 @@ export async function GET(req: Request) {
   const handle = await currentHandle();
   if (!handle) return NextResponse.json({ ok: false }, { status: 401 });
   const id = new URL(req.url).searchParams.get("id") ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ ok: false }, { status: 404 });
   const store = getStore();
   let purchase = await store.getPurchase(id);
   if (!purchase || purchase.handle !== handle) return NextResponse.json({ ok: false }, { status: 404 });

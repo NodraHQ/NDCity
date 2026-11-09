@@ -231,6 +231,15 @@ export const supabaseStore: Store = {
   async useCredit(handle, feature) {
     return !!check(await db().rpc("use_credit", { p_handle: handle, p_feature: feature }));
   },
+  async hitRate(key, max, windowSeconds) {
+    const { data, error } = await db().rpc("hit_rate", { p_key: key, p_max: max, p_window_seconds: windowSeconds });
+    // se a função ainda não existe no banco (migração 0011), não trava o login: fica só o limite em memória
+    if (error) {
+      console.error("limite de tentativas no banco falhou", error.message);
+      return true;
+    }
+    return !!data;
+  },
   async revokeEntitlement(handle, feature, { days, credits }) {
     check(await db().rpc("revoke_entitlement", { p_handle: handle, p_feature: feature, p_days: days ?? null, p_credits: credits ?? 0 }));
   },
