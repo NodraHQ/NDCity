@@ -304,3 +304,4 @@ button.banner.vote { width: auto; left: 16px; right: 76px; margin: 0; max-width:
 .legal .card ul { padding-left: 20px; margin: 6px 0; }
 .legal .card a, .modal .muted a { color: var(--ink); }
 .admin.legal { max-width: 760px; }
+.paywall-actions .btn { flex: 1 1 auto; }

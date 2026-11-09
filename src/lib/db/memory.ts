@@ -13,6 +13,7 @@ import type {
   MoveResult,
   OfficeHolder,
   Purchase,
+  Subscription,
   Store,
   VisitRow,
 } from "./types";
@@ -41,6 +42,8 @@ type Data = {
   visits: VisitRow[];
   purchases: Purchase[];
   settings: Map<string, unknown>;
+  subscriptions: Subscription[];
+  purchaseRefs: Map<string, string>;
 };
 
 const g = globalThis as unknown as { __cidadezinhaMem?: Data };
@@ -65,6 +68,8 @@ function data(): Data {
     visits: [],
     purchases: [],
     settings: new Map(),
+    subscriptions: [],
+    purchaseRefs: new Map(),
   };
   return g.__cidadezinhaMem;
 }
@@ -211,6 +216,7 @@ export const memoryStore: Store = {
     const claim = d.claims.find((c) => c.instagramHandle === handle);
     d.claims = d.claims.filter((c) => c.instagramHandle !== handle);
     for (const [k, v] of d.sessions) if (v === handle) d.sessions.delete(k);
+    for (const s of d.subscriptions) if (s.handle === handle) s.status = "cancelled";
     d.accounts.delete(handle);
     d.loginCodes = d.loginCodes.filter((c) => c.handle !== handle);
     const openE = new Set(d.elections.filter((e) => e.status === "open").map((e) => e.id));
@@ -460,6 +466,47 @@ export const memoryStore: Store = {
   async setPurchaseStatus(id, status) {
     const p = data().purchases.find((x) => x.id === id);
     if (p) p.status = status;
+  },
+  async recordPaidPurchase(p) {
+    const d = data();
+    if (d.purchaseRefs.has(p.providerRef)) return false;
+    const purchase: Purchase = { id: randomUUID(), handle: p.handle, product: p.product, amountCents: p.amountCents, status: "paid", provider: p.provider, createdAt: now() };
+    d.purchases.unshift(purchase);
+    d.purchaseRefs.set(p.providerRef, purchase.id);
+    return true;
+  },
+  async getPurchaseByProviderRef(ref) {
+    const d = data();
+    const id = d.purchaseRefs.get(ref);
+    return id ? (d.purchases.find((p) => p.id === id) ?? null) : null;
+  },
+  async createSubscription(p) {
+    const s: Subscription = { id: randomUUID(), handle: p.handle, product: p.product, preapprovalId: null, status: "pending", payerEmail: p.payerEmail, createdAt: now(), updatedAt: now() };
+    data().subscriptions.unshift(s);
+    return s;
+  },
+  async setSubscriptionPreapproval(id, preapprovalId) {
+    const s = data().subscriptions.find((x) => x.id === id);
+    if (s) s.preapprovalId = preapprovalId;
+  },
+  async getSubscription(id) {
+    return data().subscriptions.find((x) => x.id === id) ?? null;
+  },
+  async getSubscriptionByPreapproval(pid) {
+    return data().subscriptions.find((x) => x.preapprovalId === pid) ?? null;
+  },
+  async getLiveSubscription(handle) {
+    return data().subscriptions.find((x) => x.handle === handle && x.status !== "cancelled") ?? null;
+  },
+  async setSubscriptionStatus(id, status) {
+    const s = data().subscriptions.find((x) => x.id === id);
+    if (s) {
+      s.status = status;
+      s.updatedAt = now();
+    }
+  },
+  async listSubscriptions() {
+    return data().subscriptions;
   },
   async getSetting<T>(key: string) {
     return (data().settings.get(key) as T) ?? null;

@@ -526,6 +526,54 @@ function CapCard() {
   );
 }
 
+type SubRow = { id: string; handle: string; status: string; payerEmail: string | null; createdAt: string; updatedAt: string };
+
+function SubscriptionsCard() {
+  const [subs, setSubs] = useState<SubRow[]>([]);
+  const load = useCallback(async () => {
+    const j = await api("/api/admin/subscriptions");
+    if (j.ok) setSubs(j.subscriptions);
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const label: Record<string, string> = { authorized: "✅ ativa", paused: "⏸ pausada", pending: "⏳ não concluída", cancelled: "❌ cancelada" };
+  const active = subs.filter((s) => s.status === "authorized").length;
+
+  async function cancel(s: SubRow) {
+    if (!confirm(`Cancelar a assinatura de @${s.handle}? Para de cobrar; o chat continua até o fim do mês pago.`)) return;
+    const j = await api(`/api/admin/subscriptions?id=${s.id}`, "DELETE");
+    if (!j.ok) alert(j.message);
+    load();
+  }
+
+  return (
+    <div className="card">
+      <h2>💳 Assinaturas do chat ({active} ativa{active === 1 ? "" : "s"})</h2>
+      <p>
+        R$ 5/mês no cartão, renovando sozinha. Cada mensalidade paga entra no dinheiro movimentado e no limite do mês. O limite só barra
+        assinaturas novas: as renovações continuam (se precisar, cancele aqui).
+      </p>
+      <div className="table-wrap">
+        <table>
+          <tbody>
+            {subs.filter((s) => s.status !== "pending" || Date.now() - Date.parse(s.createdAt) < 86400_000).map((s) => (
+              <tr key={s.id}>
+                <td>@{s.handle}</td>
+                <td>{label[s.status] ?? s.status}</td>
+                <td>desde {new Date(s.createdAt).toLocaleDateString("pt-BR")}</td>
+                <td className="muted">{s.payerEmail}</td>
+                <td>{s.status !== "cancelled" && <button className="btn tiny danger" onClick={() => cancel(s)}>Cancelar</button>}</td>
+              </tr>
+            ))}
+            {!subs.length && <tr><td>Nenhuma assinatura ainda.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function PerksTab() {
   const [handle, setHandle] = useState("");
   const [product, setProduct] = useState<ProductId>("chat_mensal");
@@ -548,6 +596,7 @@ function PerksTab() {
   return (
     <>
     <CapCard />
+    <SubscriptionsCard />
     <form className="card" onSubmit={grant}>
       <h2>Liberar recurso pago</h2>
       <p>Para Pix que chegou direto pra você (fora do Mercado Pago) ou para dar de presente (cortesia). Pagamentos pelo site são liberados sozinhos.</p>
@@ -669,7 +718,7 @@ function StatsTab() {
           <table>
             <tbody>
               {st.revenue.recent.map((p, i) => (
-                <tr key={i}><td>{fmtDate(p.at)}</td><td>@{p.handle}</td><td>{p.label}</td><td>{money(p.cents)}</td><td>{p.provider === "manual" ? "Pix manual" : p.provider === "mercadopago" ? "Mercado Pago" : p.provider}</td></tr>
+                <tr key={i}><td>{fmtDate(p.at)}</td><td>@{p.handle}</td><td>{p.label}</td><td>{money(p.cents)}</td><td>{p.provider === "manual" ? "Pix manual" : p.provider === "mercadopago" ? "Mercado Pago" : p.provider === "mercadopago_assinatura" ? "Assinatura" : p.provider}</td></tr>
               ))}
               {!st.revenue.recent.length && <tr><td>Nenhum pagamento ainda.</td></tr>}
             </tbody>
@@ -706,6 +755,11 @@ const LOG_LABELS: Record<string, string> = {
   admin_entrou: "🔐 admin entrou",
   codigo_acesso: "🔑 código de acesso gerado",
   compra_iniciada: "🛒 abriu um pagamento",
+  assinatura_iniciada: "💳 começou a assinar o chat",
+  assinatura_ativada: "✅ assinatura do chat ativada",
+  assinatura_paga: "💰 mensalidade do chat paga",
+  assinatura_cancelled: "❌ assinatura cancelada",
+  assinatura_paused: "⏸ assinatura pausada",
   pagamento_suspeito: "⚠️ pagamento com valor diferente",
   estorno: "↩ estorno",
   limite_alterado: "🛑 limite mensal alterado",
@@ -725,6 +779,7 @@ function describe(l: LogEntry): string {
       return `${d.de} → ${d.para} (${buildingLabel(String(d.tipo ?? ""))})${d.prefeito ? " · virou prefeito(a) 🏛" : ""}`;
     case "limite_alterado":
       return formatPrice(Math.round(Number(d.valor) * 100));
+    case "assinatura_paga":
     case "pagamento":
     case "estorno":
     case "compra_iniciada":

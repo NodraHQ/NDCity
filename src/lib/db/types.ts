@@ -87,6 +87,17 @@ export type Purchase = {
   createdAt: string;
 };
 
+export type Subscription = {
+  id: string;
+  handle: string;
+  product: string;
+  preapprovalId: string | null;
+  status: "pending" | "authorized" | "paused" | "cancelled";
+  payerEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Office = "governor" | "president";
 
 export type Election = {
@@ -220,6 +231,18 @@ export interface Store {
   /** Marca como paga só se ainda estava pendente. Devolve true se mudou (evita liberar duas vezes). */
   markPurchasePaid(id: string, providerRef: string): Promise<boolean>;
   setPurchaseStatus(id: string, status: Purchase["status"]): Promise<void>;
+  /** Pagamento já feito (ex.: mensalidade da assinatura). Devolve false se esse pagamento já foi registrado. */
+  recordPaidPurchase(p: { handle: string; product: string; amountCents: number; provider: string; providerRef: string }): Promise<boolean>;
+  getPurchaseByProviderRef(providerRef: string): Promise<Purchase | null>;
+  // assinaturas
+  createSubscription(p: { handle: string; product: string; payerEmail: string }): Promise<Subscription>;
+  setSubscriptionPreapproval(id: string, preapprovalId: string): Promise<void>;
+  getSubscription(id: string): Promise<Subscription | null>;
+  getSubscriptionByPreapproval(preapprovalId: string): Promise<Subscription | null>;
+  /** A assinatura mais recente da pessoa que não foi cancelada (ou null). */
+  getLiveSubscription(handle: string): Promise<Subscription | null>;
+  setSubscriptionStatus(id: string, status: Subscription["status"]): Promise<void>;
+  listSubscriptions(): Promise<Subscription[]>;
   // configurações
   getSetting<T>(key: string): Promise<T | null>;
   setSetting(key: string, value: unknown): Promise<void>;

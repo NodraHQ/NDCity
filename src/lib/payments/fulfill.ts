@@ -12,8 +12,11 @@ import { isProductId, PRODUCTS } from "./products";
  */
 export async function applyPayment(payment: MpPayment, knownPurchase?: Purchase | null) {
   const store = getStore();
-  const purchase = knownPurchase ?? (payment.external_reference ? await store.getPurchase(payment.external_reference) : null);
-  if (!purchase || !isProductId(purchase.product) || payment.external_reference !== purchase.id) return "ignorado";
+  let purchase = knownPurchase ?? (payment.external_reference ? await store.getPurchase(payment.external_reference) : null);
+  if (purchase && payment.external_reference !== purchase.id) purchase = null;
+  // mensalidade de assinatura: a compra é encontrada pelo número do pagamento
+  if (!purchase) purchase = await store.getPurchaseByProviderRef(String(payment.id));
+  if (!purchase || !isProductId(purchase.product)) return "ignorado";
   const product = PRODUCTS[purchase.product];
 
   if (payment.status === "approved") {

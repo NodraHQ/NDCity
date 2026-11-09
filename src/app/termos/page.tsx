@@ -47,7 +47,8 @@ export default function TermsPage() {
         <h2>Recursos pagos</h2>
         <ul>
           <li>
-            <b>{p.chat_mensal.label}</b>: {formatPrice(p.chat_mensal.priceCents)}, libera o chat da sua cidade por 30 dias.
+            <b>Chat da cidade</b>: {formatPrice(p.chat_mensal.priceCents)} por mês. Dá para <b>assinar no cartão</b> (renova sozinho todo mês
+            até você cancelar) ou pagar <b>só 30 dias</b> (Pix ou cartão), sem renovar.
           </li>
           <li>
             <b>{p.personalizar.label}</b>: {formatPrice(p.personalizar.priceCents)} cada, vale 1 pintura (cores, modelo e bandeira) da sua
@@ -58,8 +59,9 @@ export default function TermsPage() {
           </li>
         </ul>
         <p>
-          O pagamento é feito pelo <b>Mercado Pago</b> (Pix ou cartão). Cada compra é <b>cobrada uma vez só</b>: nada renova sozinho. O NDCity
-          não vê nem guarda dados do seu cartão ou do seu banco.
+          O pagamento é feito pelo <b>Mercado Pago</b> (Pix ou cartão). As compras avulsas são cobradas uma vez só. A <b>assinatura do chat</b>{" "}
+          cobra {formatPrice(p.chat_mensal.priceCents)} todo mês no cartão até você cancelar, pelo menu do site, a qualquer momento: ao cancelar,
+          não há mais cobranças e o chat continua até o fim do mês já pago. O NDCity não vê nem guarda dados do seu cartão ou do seu banco.
         </p>
       </section>
 
@@ -82,8 +84,8 @@ export default function TermsPage() {
             <b>Sua casinha</b>: cidade, lote, tipo de construção, cores, bandeira e as mensagens que você escreveu no chat.
           </li>
           <li>
-            <b>Compras</b>: o que foi comprado, o valor e o número do pagamento no Mercado Pago. Dados de cartão e banco ficam só com o Mercado
-            Pago.
+            <b>Compras</b>: o que foi comprado, o valor e o número do pagamento no Mercado Pago. Na assinatura, também o e-mail da sua conta
+            do Mercado Pago (exigido por ele). Dados de cartão e banco ficam só com o Mercado Pago.
           </li>
           <li>
             <b>Acessos</b>: um contador anônimo (um cookie com um número aleatório) para saber quantas pessoas visitam o site e quem está

@@ -101,3 +101,67 @@ export function checkSignature(req: Request, dataId: string): "ok" | "invalida" 
   const b = Buffer.from(parts.v1);
   return a.length === b.length && timingSafeEqual(a, b) ? "ok" : "invalida";
 }
+
+// ------------------------------------------------------------- assinaturas
+
+export type MpPreapproval = {
+  id: string;
+  status: string; // pending, authorized, paused, cancelled
+  external_reference: string | null;
+  payer_email?: string;
+  init_point?: string;
+  next_payment_date?: string;
+  auto_recurring?: { transaction_amount: number; currency_id: string };
+};
+
+export type MpAuthorizedPayment = {
+  id: number;
+  preapproval_id: string;
+  status: string; // processed, recycling, cancelled…
+  transaction_amount: number;
+  currency_id: string;
+  payment?: { id: number; status: string; status_detail?: string };
+};
+
+/**
+ * Cria a assinatura mensal (só cartão; renova sozinha até cancelar). O Mercado
+ * Pago exige o e-mail da conta dele de quem vai pagar.
+ */
+export async function createPreapproval(opts: {
+  subscriptionId: string;
+  email: string;
+  title: string;
+  amountCents: number;
+  siteUrl: string;
+  returnPath: string;
+}) {
+  const r = await mp<MpPreapproval>("/preapproval", {
+    method: "POST",
+    body: JSON.stringify({
+      reason: opts.title,
+      external_reference: opts.subscriptionId,
+      payer_email: opts.email,
+      auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: opts.amountCents / 100, currency_id: "BRL" },
+      back_url: `${opts.siteUrl}${opts.returnPath}?assinatura=ok`,
+      status: "pending",
+    }),
+  });
+  return { preapprovalId: r.id, url: r.init_point ?? "" };
+}
+
+export function getPreapproval(id: string) {
+  return mp<MpPreapproval>(`/preapproval/${encodeURIComponent(id)}`);
+}
+
+export function cancelPreapproval(id: string) {
+  return mp<MpPreapproval>(`/preapproval/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ status: "cancelled" }) });
+}
+
+export function getAuthorizedPayment(id: string) {
+  return mp<MpAuthorizedPayment>(`/authorized_payments/${encodeURIComponent(id)}`);
+}
+
+export async function listAuthorizedPayments(preapprovalId: string) {
+  const r = await mp<{ results: MpAuthorizedPayment[] }>(`/authorized_payments/search?preapproval_id=${encodeURIComponent(preapprovalId)}`);
+  return r.results ?? [];
+}

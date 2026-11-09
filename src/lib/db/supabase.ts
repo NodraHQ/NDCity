@@ -16,6 +16,7 @@ import type {
   Office,
   Purchase,
   Store,
+  Subscription,
   VisitRow,
 } from "./types";
 
@@ -492,6 +493,57 @@ export const supabaseStore: Store = {
   async setPurchaseStatus(id, status) {
     check(await db().from("purchases").update({ status }).eq("id", id));
   },
+  async recordPaidPurchase(p) {
+    const res = await db().from("purchases").insert({
+      handle: p.handle,
+      product: p.product,
+      amount_cents: p.amountCents,
+      status: "paid",
+      provider: p.provider,
+      provider_ref: p.providerRef,
+      paid_at: new Date().toISOString(),
+    });
+    if (res.error) {
+      if (res.error.code === "23505") return false; // esse pagamento já foi registrado
+      throw new Error(`Supabase: ${res.error.message}`);
+    }
+    return true;
+  },
+  async getPurchaseByProviderRef(ref) {
+    const r = check(await db().from("purchases").select("*").eq("provider_ref", ref).maybeSingle()) as PurchaseRow | null;
+    return r ? toPurchase(r) : null;
+  },
+  async createSubscription(p) {
+    const r = check(
+      await db().from("subscriptions").insert({ handle: p.handle, product: p.product, payer_email: p.payerEmail }).select("*").single(),
+    ) as SubRow;
+    return toSub(r);
+  },
+  async setSubscriptionPreapproval(id, preapprovalId) {
+    check(await db().from("subscriptions").update({ preapproval_id: preapprovalId, updated_at: new Date().toISOString() }).eq("id", id));
+  },
+  async getSubscription(id) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    const r = check(await db().from("subscriptions").select("*").eq("id", id).maybeSingle()) as SubRow | null;
+    return r ? toSub(r) : null;
+  },
+  async getSubscriptionByPreapproval(pid) {
+    const r = check(await db().from("subscriptions").select("*").eq("preapproval_id", pid).maybeSingle()) as SubRow | null;
+    return r ? toSub(r) : null;
+  },
+  async getLiveSubscription(handle) {
+    const r = check(
+      await db().from("subscriptions").select("*").eq("handle", handle).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ) as SubRow | null;
+    return r ? toSub(r) : null;
+  },
+  async setSubscriptionStatus(id, status) {
+    check(await db().from("subscriptions").update({ status, updated_at: new Date().toISOString() }).eq("id", id));
+  },
+  async listSubscriptions() {
+    const rows = check(await db().from("subscriptions").select("*").order("created_at", { ascending: false }).limit(500)) as SubRow[];
+    return rows.map(toSub);
+  },
   async getSetting<T>(key: string) {
     const r = check(await db().from("settings").select("value").eq("key", key).maybeSingle()) as { value: T } | null;
     return r?.value ?? null;
@@ -520,6 +572,27 @@ export const supabaseStore: Store = {
     }));
   },
 };
+
+type SubRow = {
+  id: string;
+  handle: string;
+  product: string;
+  preapproval_id: string | null;
+  status: Subscription["status"];
+  payer_email: string | null;
+  created_at: string;
+  updated_at: string;
+};
+const toSub = (r: SubRow): Subscription => ({
+  id: r.id,
+  handle: r.handle,
+  product: r.product,
+  preapprovalId: r.preapproval_id,
+  status: r.status,
+  payerEmail: r.payer_email,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
 
 type PurchaseRow = {
   id: string;

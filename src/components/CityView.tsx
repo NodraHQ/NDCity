@@ -29,7 +29,7 @@ const CityCanvas = dynamic(() => import("./city/CityCanvas"), {
 type Perks = { chatUntil: string | null; customizeCredits: number; moveCredits: number };
 type ProposalV = { id: string; proposer: string; style: Style; endsAt: string; yes: number; no: number; residents: number; myVote: boolean | null; canVote: boolean };
 type Civic = { offices: { president: string | null; governors: Record<string, string> }; elections: ElectionV[] };
-type Me = { handle: string; citySlug: string | null; perks: Perks; hasPassword?: boolean } | null;
+type Me = { handle: string; citySlug: string | null; perks: Perks; hasPassword?: boolean; subscription?: { status: string } | null } | null;
 
 type Step =
   | { name: "idle" }
@@ -44,6 +44,8 @@ type Step =
   | { name: "customize"; target: "house" | "hall"; style: Style; busy?: boolean; error?: string }
   | { name: "paywall"; product: ProductId; message?: string; busy?: boolean }
   | { name: "paying"; product: ProductId; purchaseId: string; url: string }
+  | { name: "subscribe"; email: string; busy?: boolean; error?: string }
+  | { name: "subscribing"; url: string }
   | { name: "proposal"; busy?: boolean; error?: string }
   | { name: "elections" }
   | { name: "notice"; title: string; text: string };
@@ -118,6 +120,13 @@ export default function CityView({ initial }: { initial: CityData }) {
   }, [slug]);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("assinatura")) {
+      window.history.replaceState(null, "", window.location.pathname);
+      setStep({ name: "notice", title: "⏳ Ativando sua assinatura…", text: "Assim que o Mercado Pago confirmar, o chat é liberado (leva alguns segundos)." });
+      [2000, 6000, 12000, 25000].forEach((ms) =>
+        setTimeout(() => fetch("/api/subscription", { cache: "no-store" }).then(() => refreshMe()).catch(() => {}), ms),
+      );
+    }
     const pay = new URLSearchParams(window.location.search).get("pagamento");
     if (pay) {
       window.history.replaceState(null, "", window.location.pathname);
@@ -312,6 +321,58 @@ export default function CityView({ initial }: { initial: CityData }) {
     payWindow.current = w;
     setStep({ name: "paying", product, purchaseId: json.purchaseId, url: json.url });
   }
+
+  async function subscribe(e: React.FormEvent) {
+    e.preventDefault();
+    if (step.name !== "subscribe") return;
+    setStep({ ...step, busy: true, error: undefined });
+    const w = window.open("", "_blank");
+    if (w) w.document.write("<p style='font-family:monospace;padding:24px'>Abrindo o Mercado Pago…</p>");
+    const json = await postJSON("/api/subscription", { email: step.email, returnPath: `/c/${slug}` });
+    if (!json.url) {
+      w?.close();
+      return setStep({ ...step, busy: false, error: json.message });
+    }
+    if (!w) {
+      window.location.href = json.url;
+      return;
+    }
+    w.location.href = json.url;
+    payWindow.current = w;
+    setStep({ name: "subscribing", url: json.url });
+  }
+
+  async function cancelSubscription() {
+    if (!confirm("Cancelar a assinatura do chat? Você não será mais cobrado, e o chat continua até o fim do período já pago.")) return;
+    const json = await postJSON("/api/subscription/cancel");
+    await refreshMe();
+    if (!json.ok) return setStep({ name: "notice", title: "Não deu certo", text: json.message });
+    const until = json.chatUntil ? new Date(json.chatUntil).toLocaleDateString("pt-BR") : null;
+    setStep({ name: "notice", title: "Assinatura cancelada", text: until ? `Pronto, não vai cobrar mais. Seu chat continua até ${until}.` : "Pronto, não vai cobrar mais." });
+  }
+
+  // enquanto a pessoa conclui a assinatura no Mercado Pago, confere a cada 4 s
+  const subscribing = step.name === "subscribing";
+  useEffect(() => {
+    if (!subscribing) return;
+    const started = Date.now();
+    const id = setInterval(async () => {
+      if (Date.now() - started > 30 * 60_000) return clearInterval(id);
+      const r = await fetch("/api/subscription", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+      if (r?.subscription?.status === "authorized" && r.chatUntil) {
+        clearInterval(id);
+        try {
+          payWindow.current?.close();
+        } catch {
+          /* o navegador pode não deixar fechar */
+        }
+        payWindow.current = null;
+        await refreshMe();
+        setStep({ name: "notice", title: "🎉 Assinatura ativa!", text: "Seu chat está liberado e renova sozinho todo mês. Cancele quando quiser pelo menu." });
+      }
+    }, 4000);
+    return () => clearInterval(id);
+  }, [subscribing, refreshMe]);
 
   // enquanto espera o Pix, confere a cada 3 s; quando cai, fecha a aba do Mercado Pago
   const payingId = step.name === "paying" ? step.purchaseId : null;
@@ -638,7 +699,15 @@ export default function CityView({ initial }: { initial: CityData }) {
             <button className="btn" onClick={() => setStep({ name: "password" })}>🔑 {me.hasPassword ? "Trocar senha" : "Criar senha"}</button>
             <button className="btn" onClick={logout}>Sair</button>
           </div>
-          {me.perks.chatUntil && <p className="muted">Chat liberado até {new Date(me.perks.chatUntil).toLocaleDateString("pt-BR")}.</p>}
+            {me.perks.chatUntil && (
+              <p className="muted">
+                Chat liberado até {new Date(me.perks.chatUntil).toLocaleDateString("pt-BR")}
+                {me.subscription ? " · renova sozinho todo mês (assinatura)" : ""}.
+              </p>
+            )}
+            {me.subscription && (
+              <button className="login-switch" onClick={cancelSubscription}>Cancelar assinatura do chat</button>
+            )}
         </div>
       )}
 
@@ -802,6 +871,55 @@ export default function CityView({ initial }: { initial: CityData }) {
         </div>
       )}
 
+      {/* ---------- assinatura do chat */}
+      {step.name === "subscribe" && (
+        <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={subscribe}>
+            <h2>💳 Assinar o chat</h2>
+            <p>
+              <b>R$ 5 por mês no cartão.</b> Renova sozinho todo mês e você <b>cancela quando quiser</b> pelo menu. Se cancelar, o chat continua
+              até o fim do mês já pago.
+            </p>
+            <p className="muted">O Mercado Pago pede o e-mail da sua conta dele (é para lá que ele vai; o NDCity não manda nada para esse e-mail).</p>
+            <input
+              autoFocus
+              type="email"
+              value={step.email}
+              onChange={(e) => setStep({ ...step, email: e.target.value })}
+              placeholder="e-mail da sua conta do Mercado Pago"
+              autoComplete="email"
+              className="normal-case"
+            />
+            {step.error && <p className="error">{step.error}</p>}
+            <div className="row">
+              <button type="button" className="btn" onClick={() => setStep({ name: "paywall", product: "chat_mensal" })}>← Voltar</button>
+              <button className="btn primary" disabled={step.busy || !step.email.includes("@")}>{step.busy ? "Abrindo…" : "Continuar no Mercado Pago"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+      {step.name === "subscribing" && (
+        <div className="modal-bg">
+          <div className="modal">
+            <h2>⏳ Concluindo sua assinatura…</h2>
+            <p>Termine a assinatura na aba do Mercado Pago que abriu (cadastrar o cartão). Esta tela atualiza sozinha quando ficar ativa.</p>
+            <div className="row wrap">
+              <button
+                className="btn"
+                onClick={() => {
+                  payWindow.current?.close();
+                  payWindow.current = null;
+                  setStep({ name: "notice", title: "Tudo bem!", text: "Se você concluiu a assinatura, o chat é liberado sozinho em instantes." });
+                }}
+              >
+                Fechar
+              </button>
+              <button className="btn primary" onClick={() => { payWindow.current = window.open(step.url, "_blank"); }}>Abrir de novo</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ---------- recurso pago */}
       {step.name === "paywall" && (
         <div className="modal-bg" onClick={() => setStep({ name: "idle" })}>
@@ -811,11 +929,22 @@ export default function CityView({ initial }: { initial: CityData }) {
             <p className="price">{formatPrice(PRODUCTS[step.product].priceCents)}{step.product === "chat_mensal" ? " / mês" : ""}</p>
             {step.message && <p className="ok">{step.message}</p>}
             <p className="muted">
-              Pix ou cartão, cobrança única (não renova sozinho). Veja os <a href="/termos" target="_blank">Termos e reembolso</a>.
+              {step.product === "chat_mensal"
+                ? "Assinatura: cartão, renova todo mês e você cancela quando quiser. Ou pague só 30 dias (Pix ou cartão), sem renovar. "
+                : "Pix ou cartão, cobrança única. "}
+              Veja os <a href="/termos" target="_blank">Termos e reembolso</a>.
             </p>
-            <div className="row">
+            <div className="row wrap paywall-actions">
               <button className="btn" onClick={() => setStep({ name: "idle" })}>Agora não</button>
-              {!step.message && <button className="btn primary" disabled={step.busy} onClick={() => buy(step.product)}>Quero!</button>}
+              {!step.message && step.product === "chat_mensal" && (
+                <button className="btn" disabled={step.busy} onClick={() => buy(step.product)}>Só 30 dias (Pix ou cartão)</button>
+              )}
+              {!step.message && step.product === "chat_mensal" && (
+                <button className="btn primary" disabled={step.busy} onClick={() => setStep({ name: "subscribe", email: "" })}>💳 Assinar R$ 5/mês</button>
+              )}
+              {!step.message && step.product !== "chat_mensal" && (
+                <button className="btn primary" disabled={step.busy} onClick={() => buy(step.product)}>Quero!</button>
+              )}
             </div>
           </div>
         </div>
